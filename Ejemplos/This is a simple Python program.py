@@ -1,10 +1,10 @@
 # This is a simple Python program (by chat gpt)
 
 # Print "Hello, World!" to the console
-print("Hello, World!")
+print("Hola Cornudo!")
 
 # Ask the user for their name
-name = input("What is your name? ")
+name = input("Como te llamas ?? ")
 
 # Greet the user by name
-print(f"Nice to meet you, {name}!")
+print(f"Alta ornamenta, {name}!")
