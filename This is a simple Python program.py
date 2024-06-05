@@ -1,4 +1,4 @@
-# This is a simple Python program
+# This is a simple Python program (by chat gpt)
 
 # Print "Hello, World!" to the console
 print("Hello, World!")
