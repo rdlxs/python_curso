@@ -1,2 +1,2 @@
-print('Ezy Pizy, Lemon Squeezy!')
+print(1 + 2)
       
