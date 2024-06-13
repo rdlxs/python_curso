@@ -9,7 +9,7 @@ print(stringstabeadas)
 #generar apostrofes
 print('Prueba del output "Esto, eso, aquello \'e \'s, que se yo...esto es u\'n bardo" ')
 print("Prueba del output \"Esto, eso, aquello 'e 's, que se yo...esto es u'n bardo\" ")
-print("""Prueba del output "Esto, eso, aquello 'e' 's, que se yo...esto es u'n bardo" """)
+print("""Prueba del output "Esto, eso, aquello 'e 's, que se yo...esto es u'n bardo" """)
 
 #otra forma de hacer split
 otraformadesplit = """Esta es otra forma
