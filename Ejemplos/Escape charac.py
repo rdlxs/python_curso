@@ -19,9 +19,9 @@ un split"""
 print(otraformadesplit)
 
 #delimitar la cadena de codigo
-unaformamasdesplit = """Esta es otra forma \
-de hacer \
-un split"""
+unaformamasdesplit = """Esta es una forma \
+de  \
+limitar la cadena"""
 
 print(unaformamasdesplit)
 
