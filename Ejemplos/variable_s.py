@@ -8,5 +8,5 @@ print(ios)
 #usando Type
 print(type(vendor))
 print(type(equipo))
-print(type(iso))
+print(type(ios))
 
