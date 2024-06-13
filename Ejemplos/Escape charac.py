@@ -1,8 +1,8 @@
-#generar saltos con la \
+#generar saltos con la \n
 splitstring = "Prueba de como \nel \nsimbolo \nde \nbarra \ninvertida genera un scape"
 print(splitstring)
 
-#generar tabulaciones con la \ 
+#generar tabulaciones con la \t 
 stringstabeadas = "1 \t2 \t3 \t4 \t5"
 print(stringstabeadas)
 
@@ -18,9 +18,18 @@ un split"""
 
 print(otraformadesplit)
 
-#una forma mas de hacer split
+#delimitar la cadena de codigo
 unaformamasdesplit = """Esta es otra forma \
 de hacer \
 un split"""
 
 print(unaformamasdesplit)
+
+#incluir el caracter \ en el string
+print("C:\User\max\script.py") 
+
+#agregando otro \ al string
+print("C:\\User\\max\\script.py") 
+
+#usando r (raw) al incio del string
+print(r"C:\\User\\max\\script.py") 
