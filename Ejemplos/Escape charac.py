@@ -7,5 +7,13 @@ stringstabeadas = "1 \t2 \t3 \t4 \t5"
 print(stringstabeadas)
 
 #generar apostrofes
-print('Prueba para del output "Esto, eso, aquello \'e \'s, que se yo...esto es u\'n bardo" ')
-print("Prueba para del output \"Esto, eso, aquello 'e 's, que se yo...esto es u'n bardo\" ")
+print('Prueba del output "Esto, eso, aquello \'e \'s, que se yo...esto es u\'n bardo" ')
+print("Prueba del output \"Esto, eso, aquello 'e 's, que se yo...esto es u'n bardo\" ")
+print("""Prueba del output "Esto, eso, aquello e's' que se yo...esto es u'n bardo" """)
+
+#otra forma de hacer split
+otraformadesplit = """Esta es otra forma
+de hacer
+un split"""
+
+print(otraformadesplit)
