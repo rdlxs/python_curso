@@ -30,4 +30,4 @@ print(unaformamasdesplit)
 print("C:\\User\\max\\script.py") 
 
 #usando r (raw) al incio del string
-print(r"C:\\User\\max\\script.py") 
+print(r"C:\User\max\script.py") 
