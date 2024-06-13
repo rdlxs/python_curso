@@ -8,3 +8,4 @@ print(stringstabeadas)
 
 #generar apostrofes
 print('Prueba para del output "Esto, eso, aquello \'e \'s, que se yo...esto es u\'n bardo" ')
+print("Prueba para del output \"Esto, eso, aquello 'e 's, que se yo...esto es u'n bardo\" ")
