@@ -8,6 +8,8 @@ print(type(vendor))
 print(type(equipo))
 print(type(ios))
 
-ios = "XR 7.2"
+ios_xr = "XR 7.2"
 print(ios)
 print(type(ios))
+
+print(vendor + " " + equipo + " " + ios_xr  + " " + "backbone")
