@@ -26,8 +26,6 @@ un split"""
 print(unaformamasdesplit)
 
 #incluir el caracter \ en el string
-print("C:\User\max\script.py") 
-
 #agregando otro \ al string
 print("C:\\User\\max\\script.py") 
 
