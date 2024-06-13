@@ -13,3 +13,5 @@ print(ios)
 print(type(ios))
 
 print(vendor + " " + equipo + " " + ios_xr  + " " + "backbone")
+
+print(vendor, equipo, ios_xr + "backbone")
