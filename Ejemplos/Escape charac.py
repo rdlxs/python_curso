@@ -17,3 +17,10 @@ de hacer
 un split"""
 
 print(otraformadesplit)
+
+#una forma mas de hacer split
+unaformamasdesplit = """Esta es otra forma \
+de hacer \
+un split"""
+
+print(unaformamasdesplit)
