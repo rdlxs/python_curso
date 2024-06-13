@@ -1,7 +1,7 @@
 #variables
 vendor = "Cisco"
 equipo = "ASR9k"
-ios = "XR 7.2.3"
+ios = "7.2"
 
 print(ios)
 
