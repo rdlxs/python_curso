@@ -56,6 +56,7 @@ def calcular_y_graficar(parametros):
     return fig, roi, mes_repago, costo_total_man, costo_total_dev
 
 
+
 # Función para generar resultados y mostrar resumen
 def generar_resultados():
     try:
