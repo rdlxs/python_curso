@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 
-# Función para calcular, graficar y devolver métricas clave
+# Función para calcular, graficar y devolver métricas 
 def calcular_y_graficar(parametros):
     # Cálculos principales
     hs_man = parametros['hs_man']
@@ -96,11 +96,6 @@ def generar_resultados():
     except Exception as e:
         resultados_label.config(text=f"Error: {str(e)}")
 
-
-# Limpiar widgets del frame
-def limpiar_frame(frame):
-    for widget in frame.winfo_children():
-        widget.destroy()
 
 
 # Configuración de la interfaz gráfica
