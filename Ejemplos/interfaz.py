@@ -118,6 +118,7 @@ notebook.add(frame_config, text="Configuración")
 
 # Entradas para los parámetros con valores iniciales
 parametros = ['tareas', 'periodo', 'hs_man', 'hs_dev', 'hs_sop', '$_man', '$_dev']
+valores_iniciales = {'hs_man': 10, 'tareas': 5, 'periodo': 12, '$_man': 50, '$_dev': 100, 'hs_dev': 200, 'hs_sop': 5}
 entradas_parametros = {}
 
 for idx, param in enumerate(parametros):
@@ -126,7 +127,7 @@ for idx, param in enumerate(parametros):
 
     entry = ttk.Entry(frame_config)
     entry.grid(row=idx, column=1, padx=10, pady=5, sticky="w")
-    entry.insert(0,[param])
+    entry.insert(0,valores_iniciales[param])
     entradas_parametros[param] = entry
 
 # Pestaña de resultados
