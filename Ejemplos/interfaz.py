@@ -84,7 +84,7 @@ def generar_resultados():
             f"Periodo de Repago: Mes {mes_repago if mes_repago else 'Sin Repago'}"
         )
         resultados_label.config(text=resumen)
-        limpiar_frame(frame_grafico)
+        
 
         # Mostrar gráfico en el frame
         canvas = FigureCanvasTkAgg(fig, master=frame_grafico)
