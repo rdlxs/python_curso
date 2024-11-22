@@ -1,13 +1,12 @@
 import tkinter as tk
 from tkinter import ttk
 import pandas as pd
+import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 
 # Función para calcular, graficar y devolver métricas clave
 def calcular_y_graficar(parametros):
-    import matplotlib.pyplot as plt
-
     # Cálculos principales
     hs_man = parametros['hs_man']
     tareas = parametros['tareas']
@@ -29,26 +28,38 @@ def calcular_y_graficar(parametros):
     df['$_Man'] = df['$_Man'].cumsum()
     df['$_Aut'] = costo_desarrollo_API + df['$_Sop'].cumsum()
     df['Ahorro'] = df['$_Man'] - df['$_Aut']
+    
+    # Buscar mes de repago
     mes_repago = df[df['Ahorro'] > 0].index.min()
 
     roi = (df['Ahorro'].iloc[-1] / costo_total_man) * 100 if costo_total_man != 0 else 0
 
-    # Gráfico mejorado
+    # Generación y personalización del gráfico con líneas rectas
     fig, ax = plt.subplots(figsize=(10, 6))
-    ax.plot(df.index, df['$_Man'], label='TCO (Manual)', color='#1f77b4', linewidth=2, where='post')
-    ax.plot(df.index, df['$_Aut'], label='TCO (Automatización)', color='#2ca02c', linewidth=2, linestyle='--', where='post')
-    ax.plot(df.index, df['Ahorro'], label='Ahorro Acumulado ($)', color='#ff7f0e', linestyle='-.', linewidth=2, where='post')
 
-    if mes_repago:
+    # Trazar curvas con líneas rectas
+    ax.plot(df.index, df['$_Man'], label='TCO (Manual)', color='#1f77b4', linewidth=2)
+    ax.plot(df.index, df['$_Aut'], label='TCO (Automatización)', color='#2ca02c', linewidth=2, linestyle='--')
+    ax.plot(df.index, df['Ahorro'], label='Ahorro Acumulado ($)', color='#ff7f0e', linestyle='-.', linewidth=2)
+
+    # Línea de repago
+    if pd.notna(mes_repago):
         ax.axvline(x=mes_repago, color='red', linestyle=':', linewidth=2, label=f'Repago: Mes {mes_repago}')
         ax.text(mes_repago, ax.get_ylim()[1]*0.9, f"Mes {mes_repago}", color='red', fontsize=10, ha='center')
 
+    # Formato del eje Y para mostrar valores monetarios
     ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'${x:,.0f}'))
+
+    # Personalización del título, ejes y leyenda
     ax.set_title('Evolución de TCO y Ahorro Acumulado', fontsize=16, fontweight='bold')
     ax.set_xlabel('Meses', fontsize=12)
     ax.set_ylabel('Costo ($)', fontsize=12)
     ax.grid(visible=True, linestyle='--', alpha=0.6)
+
+    # Leyenda mejorada
     ax.legend(loc='upper left', fontsize=10, frameon=True, fancybox=True, shadow=True)
+
+    # Fondo estilizado
     ax.set_facecolor('#f7f7f7')
     fig.patch.set_facecolor('#ffffff')
     plt.tight_layout()
@@ -56,13 +67,16 @@ def calcular_y_graficar(parametros):
     return fig, roi, mes_repago, costo_total_man, costo_total_dev
 
 
-
 # Función para generar resultados y mostrar resumen
 def generar_resultados():
     try:
+        # Validación de parámetros
         parametros = {key: float(entry.get()) for key, entry in entradas_parametros.items()}
+        
+        # Llamada a la función para calcular y graficar
         fig, roi, mes_repago, costo_total_man, costo_total_dev = calcular_y_graficar(parametros)
 
+        # Mostrar resumen
         resumen = (
             f"TCO Manual: ${costo_total_man:.2f}\n"
             f"TCO Automático: ${costo_total_dev:.2f}\n"
@@ -72,12 +86,16 @@ def generar_resultados():
         resultados_label.config(text=resumen)
         limpiar_frame(frame_grafico)
 
+        # Mostrar gráfico en el frame
         canvas = FigureCanvasTkAgg(fig, master=frame_grafico)
         canvas.draw()
         canvas.get_tk_widget().pack(fill='both', expand=True)
 
+    except ValueError as e:
+        resultados_label.config(text=f"Error en los valores ingresados: {str(e)}")
     except Exception as e:
         resultados_label.config(text=f"Error: {str(e)}")
+
 
 # Limpiar widgets del frame
 def limpiar_frame(frame):
@@ -86,8 +104,6 @@ def limpiar_frame(frame):
 
 
 # Configuración de la interfaz gráfica
-
-
 root = tk.Tk()
 root.title("Calculadora TCO")
 root.geometry("800x600")
@@ -140,3 +156,4 @@ btn_salir = ttk.Button(frame_botones, text="Salir", command=root.quit)
 btn_salir.pack(side="right", padx=5)
 
 root.mainloop()
+
