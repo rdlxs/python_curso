@@ -93,11 +93,7 @@ root.geometry("800x600")
 root.option_add("*Font", "Arial 12")
 style = ttk.Style()
 style.theme_use("clam")
-
-from tkinter import PhotoImage
-
-icono = PhotoImage(file="C:\Users\maxgt\OneDrive\Documents\GitHub\python_curso\Ejemplos\icon.ico")  
-root.iconphoto(False, icono)
+root.iconbitmap("icon.ico")
 
 
 # Notebook para pestañas
