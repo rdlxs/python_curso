@@ -8,14 +8,14 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 # Función para calcular, graficar y devolver métricas 
 def calcular_y_graficar(parametros):
     # Cálculos principales
-    hs_man = parametros['hs_man']
     tareas = parametros['tareas']
     periodo = int(parametros['periodo'])
-    costo_hora_manual = parametros['$_man']
-    costo_hora_desarrollo = parametros['$_dev']
+    hs_man = parametros['hs_man']
     hs_dev = parametros['hs_dev']
     hs_sop = parametros['hs_sop']
-
+    costo_hora_manual = parametros['$_man']
+    costo_hora_desarrollo = parametros['$_dev']
+     
     costo_total_man = hs_man * costo_hora_manual * tareas * periodo
     costo_total_dev = hs_dev * costo_hora_desarrollo + hs_sop * periodo * costo_hora_desarrollo
     df = pd.DataFrame({'Mes': range(1, periodo + 1)}).set_index('Mes')
