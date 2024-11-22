@@ -96,7 +96,7 @@ style.theme_use("clam")
 
 from tkinter import PhotoImage
 
-icono = PhotoImage(file="icon.png")  
+icono = PhotoImage(file="C:\Users\maxgt\OneDrive\Documents\GitHub\python_curso\Ejemplos\icon.png")  
 root.iconphoto(False, icono)
 
 
