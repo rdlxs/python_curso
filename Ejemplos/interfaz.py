@@ -4,6 +4,9 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
+# Definir WACC anual y calcular el WACC mensual
+WACC_anual = 0.13
+WACC_mensual = (1 + WACC_anual) ** (1 / 12) - 1
 
 # Función para calcular, graficar y devolver métricas 
 def calcular_y_graficar(parametros):
@@ -18,16 +21,23 @@ def calcular_y_graficar(parametros):
      
     costo_total_man = hs_man * costo_hora_manual * tareas * periodo
     costo_total_dev = hs_dev * costo_hora_desarrollo + hs_sop * periodo * costo_hora_desarrollo
-    df = pd.DataFrame({'Mes': range(1, periodo + 1)}).set_index('Mes')
+    costo_desarrollo_API = hs_dev * costo_hora_desarrollo
 
+    df = pd.DataFrame({'Mes': range(1, periodo + 1)}).set_index('Mes')
     df['HH_Man'] = tareas * hs_man
     df['$_Man'] = df['HH_Man'] * costo_hora_manual
     df['HH_Sop'] = hs_sop
     df['$_Sop'] = df['HH_Sop'] * costo_hora_desarrollo
-    costo_desarrollo_API = hs_dev * costo_hora_desarrollo
     df['$_Man'] = df['$_Man'].cumsum()
     df['$_Aut'] = costo_desarrollo_API + df['$_Sop'].cumsum()
     df['Ahorro'] = df['$_Man'] - df['$_Aut']
+
+    # Descontar los ahorros acumulados con WACC
+    df['Des_%'] = 1 / ((1 + WACC_mensual) ** df.index)
+    df['$_Man_D'] = (df['$_Man'] * df['Des_%']).cumsum()
+    df['$_Sop_D'] = (df['$_Sop'] * df['Des_%']).cumsum()
+    df['$_Aut_D'] = df['$_Sop_D'] + costo_desarrollo_API
+    df['$_Ahorro_D'] = (df['$_Man_D'] - df['$_Sop_D']) - costo_desarrollo_API
     
     # Buscar mes de repago
     mes_repago = df[df['Ahorro'] > 0].index.min()
