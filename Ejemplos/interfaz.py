@@ -35,9 +35,9 @@ def calcular_y_graficar(parametros):
 
     # Gráfico mejorado
     fig, ax = plt.subplots(figsize=(10, 6))
-    ax.step(df.index, df['$_Man'], label='TCO (Manual)', color='#1f77b4', linewidth=2, where='post')
-    ax.step(df.index, df['$_Aut'], label='TCO (Automatización)', color='#2ca02c', linewidth=2, linestyle='--', where='post')
-    ax.step(df.index, df['Ahorro'], label='Ahorro Acumulado ($)', color='#ff7f0e', linestyle='-.', linewidth=2, where='post')
+    ax.plot(df.index, df['$_Man'], label='TCO (Manual)', color='#1f77b4', linewidth=2, where='post')
+    ax.plot(df.index, df['$_Aut'], label='TCO (Automatización)', color='#2ca02c', linewidth=2, linestyle='--', where='post')
+    ax.plot(df.index, df['Ahorro'], label='Ahorro Acumulado ($)', color='#ff7f0e', linestyle='-.', linewidth=2, where='post')
 
     if mes_repago:
         ax.axvline(x=mes_repago, color='red', linestyle=':', linewidth=2, label=f'Repago: Mes {mes_repago}')
