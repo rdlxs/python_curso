@@ -48,14 +48,12 @@ def uninstall_app(keyword):
         print(f"No se encontró ningún paquete que contenga '{keyword}'.")
 
 def download_installer(ftp_url, output_file):
-    """ Descarga el archivo .deb desde la URL """
-    print(f"Descargando instalador desde {ftp_url}...")
-try:
-    print(f"Descargando {ftp_url} ...")
-    urllib.request.urlretrieve(ftp_url, output_file)
-    print(f"✅ Archivo descargado correctamente en {output_file}")
-except Exception as e:
-    print(f"❌ Error descargando el archivo: {e}")
+    try:
+        print(f"Descargando {ftp_url} ...")
+        urllib.request.urlretrieve(ftp_url, output_file)
+        print(f"✅ Archivo descargado correctamente en {output_file}")
+    except Exception as e:
+        print(f"❌ Error descargando el archivo: {e}")
 
 def install_deb(deb_path):
     """ Instala el paquete .deb """
