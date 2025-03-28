@@ -1,5 +1,6 @@
 import os
 import subprocess
+import re
 import urllib.request
 
 # Configuración
@@ -56,7 +57,10 @@ def uninstall_app(keyword):
 def download_installer(ftp_url, output_file):
     """Descarga el archivo .deb desde un servidor FTP"""
     try:
-        print(f"Descargando {ftp_url} ...")
+        # Extraer solo la parte del host y la ruta, omitiendo el usuario y la contraseña
+        clean_url = re.sub(r'ftp://([^@]+)@', 'ftp://', ftp_url)  # Elimina usuario y contraseña
+        print(f"Descargando {clean_url} ...")
+        
         urllib.request.urlretrieve(ftp_url, output_file)
         print(f"✅ Archivo descargado correctamente en {output_file}")
     except Exception as e:
