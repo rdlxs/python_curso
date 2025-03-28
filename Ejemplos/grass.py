@@ -47,6 +47,9 @@ def uninstall_app(keyword):
     else:
         print(f"No se encontró ningún paquete que contenga '{keyword}'.")
 
+def download_installer(ftp_url, output_file):
+    """ Descarga el archivo .deb desde la URL """
+    print(f"Descargando instalador desde {ftp_url}...")
 try:
     print(f"Descargando {ftp_url} ...")
     urllib.request.urlretrieve(ftp_url, output_file)
@@ -70,6 +73,6 @@ def verify_installation(keyword):
 if __name__ == "__main__":
     stop_process(PROCESS_NAME)
     uninstall_app(APP_KEYWORD)
-    download_installer(DEB_URL, DEB_PATH)
-    install_deb(DEB_PATH)
+    download_installer(ftp_url, output_file)
+    install_deb(output_file)
     verify_installation(APP_KEYWORD)
