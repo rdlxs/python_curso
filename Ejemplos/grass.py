@@ -54,15 +54,6 @@ def uninstall_app(keyword):
     else:
         print(f"No se encontró ningún paquete que contenga '{keyword}'.")
 
-def change_permissions():
-    """Cambia los permisos de la carpeta /tmp para asegurar la propiedad del usuario"""
-    try:
-        print("Cambiando permisos de /tmp...")
-        subprocess.run(f"sudo chown -R idtt:root /tmp", shell=True, check=True)
-        print("✅ Permisos de la carpeta /tmp cambiados correctamente.")
-    except subprocess.CalledProcessError as e:
-        print(f"❌ Error cambiando permisos de /tmp: {e}")
-
 def download_installer(ftp_url, output_file):
     """Descarga el archivo .deb desde un servidor FTP"""
     try:
@@ -74,6 +65,15 @@ def download_installer(ftp_url, output_file):
         print(f"✅ Archivo descargado correctamente en {output_file}")
     except Exception as e:
         print(f"❌ Error descargando el archivo: {e}")
+
+def change_permissions():
+    """Cambia los permisos de la carpeta /tmp para asegurar la propiedad del usuario"""
+    try:
+        print("Cambiando permisos de /tmp...")
+        subprocess.run(f"sudo chown -R idtt:root /tmp", shell=True, check=True)
+        print("✅ Permisos de la carpeta /tmp cambiados correctamente.")
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Error cambiando permisos de /tmp: {e}")
 
 def install_deb(deb_path):
     """Instala el paquete .deb y maneja los errores detalladamente"""
@@ -109,7 +109,7 @@ def verify_installation(keyword):
 if __name__ == "__main__":
     stop_process(PROCESS_NAME)
     uninstall_app(APP_KEYWORD)
-    change_permissions()
     download_installer(ftp_url, output_file)
+    change_permissions()
     install_deb(output_file)
     verify_installation(APP_KEYWORD)
