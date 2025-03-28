@@ -9,15 +9,6 @@ PROCESS_NAME = "grass"  # Nombre del proceso a cerrar
 ftp_url = "ftp://root:manager01@10.254.125.162/Repositorio/img_routers/Grass_5.2.2_amd64.deb"
 output_file = "/tmp/Grass_5.2.2_amd64.deb"
 
-def change_permissions():
-    """Cambia los permisos de la carpeta /tmp para asegurar la propiedad del usuario"""
-    try:
-        print("Cambiando permisos de /tmp...")
-        subprocess.run("sudo chown -R idtt:root /tmp", shell=True, check=True)
-        print("✅ Permisos de la carpeta /tmp cambiados correctamente.")
-    except subprocess.CalledProcessError as e:
-        print(f"❌ Error cambiando permisos de /tmp: {e}")
-
 def get_installed_package(keyword):
     """Busca el nombre exacto del paquete que coincide con la palabra clave"""
     try:
@@ -62,6 +53,15 @@ def uninstall_app(keyword):
             print(f"Error desinstalando {package_name}: {e}")
     else:
         print(f"No se encontró ningún paquete que contenga '{keyword}'.")
+
+def change_permissions():
+    """Cambia los permisos de la carpeta /tmp para asegurar la propiedad del usuario"""
+    try:
+        print("Cambiando permisos de /tmp...")
+        subprocess.run(f"sudo chown -R idtt:root /tmp", shell=True, check=True)
+        print("✅ Permisos de la carpeta /tmp cambiados correctamente.")
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Error cambiando permisos de /tmp: {e}")
 
 def download_installer(ftp_url, output_file):
     """Descarga el archivo .deb desde un servidor FTP"""
