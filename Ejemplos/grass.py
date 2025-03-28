@@ -2,18 +2,21 @@ import os
 import subprocess
 import urllib.request
 import re
-import os
-
-# Cambiar los permisos de la carpeta /tmp (por ejemplo, a 1777)
-os.chmod('/tmp', 0o1777)
-print("✅ Permisos de la carpeta /tmp cambiados correctamente.")
-
 
 # Configuración
 APP_KEYWORD = "Grass"  # Palabra clave del paquete a desinstalar
 PROCESS_NAME = "grass"  # Nombre del proceso a cerrar
 ftp_url = "ftp://root:manager01@10.254.125.162/Repositorio/img_routers/Grass_5.2.2_amd64.deb"
 output_file = "/tmp/Grass_5.2.2_amd64.deb"
+
+def change_permissions():
+    """Cambia los permisos de la carpeta /tmp para asegurar la propiedad del usuario"""
+    try:
+        print("Cambiando permisos de /tmp...")
+        subprocess.run("sudo chown -R idtt:root /tmp", shell=True, check=True)
+        print("✅ Permisos de la carpeta /tmp cambiados correctamente.")
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Error cambiando permisos de /tmp: {e}")
 
 def get_installed_package(keyword):
     """Busca el nombre exacto del paquete que coincide con la palabra clave"""
