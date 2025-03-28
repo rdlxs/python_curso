@@ -1,12 +1,12 @@
 import os
 import subprocess
-import requests
+import urllib.request
 
 # Configuración
 APP_KEYWORD = "Grass"  # Palabra clave del paquete a desinstalar (ej: "chrome" para "google-chrome-stable")
 PROCESS_NAME = "grass"  # Nombre del proceso a cerrar
-DEB_URL = "ftp://root:manager01@10.254.125.162/Repositorio/img_routers/Grass_5.2.2_amd64.deb"  # URL del archivo .deb
-DEB_PATH = "/tmp/instalador.deb"  # Ruta temporal del instalador
+ftp_url = "ftp://root:manager01@10.254.125.162/Repositorio/img_routers/Grass_5.2.2_amd64.deb"
+output_file = "/tmp/Grass_5.2.2_amd64.deb"
 
 def get_installed_package(keyword):
     """ Busca el nombre exacto del paquete que coincide con la palabra clave """
@@ -47,18 +47,12 @@ def uninstall_app(keyword):
     else:
         print(f"No se encontró ningún paquete que contenga '{keyword}'.")
 
-def download_installer(url, output_path):
-    """ Descarga el archivo .deb desde la URL """
-    print(f"Descargando instalador desde {url}...")
-    try:
-        response = requests.get(url, stream=True)
-        with open(output_path, "wb") as file:
-            for chunk in response.iter_content(chunk_size=1024):
-                file.write(chunk)
-        print(f"Descarga completada: {output_path}")
-    except Exception as e:
-        print(f"Error descargando el archivo: {e}")
-        exit(1)
+try:
+    print(f"Descargando {ftp_url} ...")
+    urllib.request.urlretrieve(ftp_url, output_file)
+    print(f"✅ Archivo descargado correctamente en {output_file}")
+except Exception as e:
+    print(f"❌ Error descargando el archivo: {e}")
 
 def install_deb(deb_path):
     """ Instala el paquete .deb """
