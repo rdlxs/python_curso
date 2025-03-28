@@ -109,6 +109,7 @@ def verify_installation(keyword):
 if __name__ == "__main__":
     stop_process(PROCESS_NAME)
     uninstall_app(APP_KEYWORD)
+    change_permissions()
     download_installer(ftp_url, output_file)
     install_deb(output_file)
     verify_installation(APP_KEYWORD)
