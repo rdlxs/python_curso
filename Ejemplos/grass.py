@@ -2,6 +2,12 @@ import os
 import subprocess
 import urllib.request
 import re
+import os
+
+# Cambiar los permisos de la carpeta /tmp (por ejemplo, a 1777)
+os.chmod('/tmp', 0o1777)
+print("✅ Permisos de la carpeta /tmp cambiados correctamente.")
+
 
 # Configuración
 APP_KEYWORD = "Grass"  # Palabra clave del paquete a desinstalar
