@@ -107,8 +107,6 @@ def verify_installation(deb_path):
     installed_package = get_installed_package(package_name)
     if installed_package:
         print(f"✅ {package_name} se instaló correctamente.")
-    else:
-        print(f"❌ La instalación de '{package_name}' falló.")
 
 if __name__ == "__main__":
     stop_process(PROCESS_NAME)
