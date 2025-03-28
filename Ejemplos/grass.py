@@ -1,7 +1,7 @@
 import os
 import subprocess
-import re
 import urllib.request
+import re
 
 # Configuración
 APP_KEYWORD = "Grass"  # Palabra clave del paquete a desinstalar
@@ -71,20 +71,23 @@ def install_deb(deb_path):
     print(f"Instalando {deb_path}...")
     try:
         # Intentamos instalar el paquete .deb con dpkg
-        result = subprocess.run(f"sudo dpkg -i {deb_path}", shell=True, capture_output=True, text=True, check=True)
-        print(result.stdout)  # Imprime la salida estándar de dpkg
+        result = subprocess.run(f"sudo dpkg -i {deb_path}", shell=True, capture_output=True, text=True)
+        # Si dpkg no tuvo éxito, imprimimos el error
+        if result.returncode != 0:
+            print(f"❌ Error al instalar el paquete .deb con dpkg: {result.stderr}")
+            print(f"Salida estándar: {result.stdout}")
+            # Ahora intentamos corregir las dependencias
+            print("❗ Intentando reparar dependencias con apt...")
+            repair_result = subprocess.run("sudo apt -f install -y", shell=True, capture_output=True, text=True)
+            if repair_result.returncode != 0:
+                print(f"❌ Error reparando dependencias: {repair_result.stderr}")
+                print(f"Salida estándar de apt: {repair_result.stdout}")
+            else:
+                print("✅ Dependencias reparadas exitosamente.")
+        else:
+            print("✅ Instalación completada exitosamente con dpkg.")
     except subprocess.CalledProcessError as e:
-        # Captura los errores de dpkg
-        print(f"❌ Error instalando el paquete .deb: {e.stderr}")
-        print("❗ Intentando reparar dependencias...")
-        try:
-            # Si dpkg falla, tratamos de arreglar las dependencias faltantes con apt
-            repair_result = subprocess.run("sudo apt -f install -y", shell=True, capture_output=True, text=True, check=True)
-            print(repair_result.stdout)  # Imprime la salida de reparación
-        except subprocess.CalledProcessError as repair_error:
-            # Si aún no se puede reparar, mostramos el error
-            print(f"❌ No se pudo reparar las dependencias: {repair_error.stderr}")
-            print("⚠️ La instalación falló debido a un problema con dependencias.")
+        print(f"❌ Error ejecutando el comando dpkg: {e.stderr}")
 
 def verify_installation(keyword):
     """Verifica si la aplicación está instalada correctamente"""
