@@ -95,6 +95,9 @@ def install_deb(deb_path):
                 print("✅ Dependencias reparadas exitosamente.")
         else:
             print("✅ Instalación completada exitosamente con dpkg.")
+            print(f"Ejecutando {PROCESS_NAME}...")
+            subprocess.run(f"sudo {PROCESS_NAME}", shell=True, check=True)  # Comando para ejecutar la app
+            print(f"✅ {PROCESS_NAME} se está ejecutando.")
     except subprocess.CalledProcessError as e:
         print(f"❌ Error ejecutando el comando dpkg: {e.stderr}")
 
