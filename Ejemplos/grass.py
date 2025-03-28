@@ -98,13 +98,17 @@ def install_deb(deb_path):
     except subprocess.CalledProcessError as e:
         print(f"❌ Error ejecutando el comando dpkg: {e.stderr}")
 
-def verify_installation(keyword):
+def verify_installation(deb_path):
     """Verifica si la aplicación está instalada correctamente"""
-    package_name = get_installed_package(keyword)
-    if package_name:
+    # Obtén el nombre del paquete a partir del archivo .deb
+    package_name = deb_path.split('/')[-1].replace(".deb", "")  # Extraer nombre de paquete del archivo .deb
+
+    # Verificar si el paquete está instalado
+    installed_package = get_installed_package(package_name)
+    if installed_package:
         print(f"✅ {package_name} se instaló correctamente.")
     else:
-        print(f"❌ La instalación de '{keyword}' falló.")
+        print(f"❌ La instalación de '{package_name}' falló.")
 
 if __name__ == "__main__":
     stop_process(PROCESS_NAME)
