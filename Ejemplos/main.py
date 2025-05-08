@@ -98,7 +98,7 @@ def update_output(list_of_contents, selected_value):
     triggered_by = [p['prop_id'] for p in callback_context.triggered][0]
 
     if list_of_contents:
-        # Mostrar el icono de carga
+        # Mostrar el icono de carga mientras se procesa el archivo
         df, error_message = parse_contents(list_of_contents)
         if df is None:
             return html.Div(error_message, style={'color': 'red'}), [], None
@@ -199,3 +199,4 @@ def create_pdf(fig, statistics):
 # Ejecución del servidor
 if __name__ == '__main__':
     app.run(debug=False)
+
