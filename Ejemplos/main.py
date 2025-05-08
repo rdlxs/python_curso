@@ -204,4 +204,4 @@ def generate_pdf(n_clicks, contents, selected_value):
         return dcc.send_file(tmp_pdf.name)
 
 if __name__ == '__main__':
-    app.run_server(debug=False)
+    app.run(debug=False)
