@@ -199,4 +199,3 @@ def create_pdf(fig, statistics):
 # Ejecución del servidor
 if __name__ == '__main__':
     app.run(debug=False)
-
