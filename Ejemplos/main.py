@@ -63,13 +63,14 @@ app.layout = html.Div([
         },
         multiple=False
     ),
+    dls.Ring(
+        id="loading-spinner",
+        children=html.Div(id='output-data-upload', style={'margin': '20px 0'}),
+    ),
     dcc.Dropdown(
         id='value-dropdown',
         placeholder='Select a value...',
         style={'margin': '10px 0'}
-    ),
-    dls.Ring(
-        html.Div(id='output-data-upload', style={'margin': '20px 0'}),
     ),
     html.A(
         className="github-fab",
@@ -88,7 +89,8 @@ app.layout = html.Div([
 
 @app.callback(
     [Output('output-data-upload', 'children'),
-     Output('value-dropdown', 'options')],
+     Output('value-dropdown', 'options'),
+     Output('loading-spinner', 'children')],
     [Input('upload-data', 'contents'),
      Input('value-dropdown', 'value')]
 )
@@ -96,9 +98,10 @@ def update_output(list_of_contents, selected_value):
     triggered_by = [p['prop_id'] for p in callback_context.triggered][0]
 
     if list_of_contents:
+        # Mostrar el icono de carga
         df, error_message = parse_contents(list_of_contents)
         if df is None:
-            return html.Div(error_message, style={'color': 'red'}), []
+            return html.Div(error_message, style={'color': 'red'}), [], None
 
         time_column = "Time" if "Time" in df.columns else None
         valid_columns = [col for col in df.columns if df[col].dtype in ['float64', 'int64']]
@@ -152,6 +155,7 @@ def update_output(list_of_contents, selected_value):
 
             stats_df = pd.DataFrame(statistics)
 
+            # Ocultar el icono de carga
             return html.Div([
                 map_fig,
                 dcc.Graph(id='time-series', figure=fig_time_series),
@@ -164,9 +168,9 @@ def update_output(list_of_contents, selected_value):
                         {'if': {'row_index': 'odd'}, 'backgroundColor': 'rgb(248, 248, 248)'}
                     ]
                 )
-            ]), dropdown_options
+            ]), dropdown_options, None
 
-    return "No file uploaded.", []
+    return "No file uploaded.", [], None
 
 # Función para generar el PDF
 def create_pdf(fig, statistics):
