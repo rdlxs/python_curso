@@ -119,7 +119,7 @@ def update_output(list_of_contents, selected_value):
 
             # Validar columnas GPS
             if 'Latitude' in df.columns and 'Longitude' in df.columns:
-                fig_map = px.scatter_mapbox(df, lat='Latitude', lon='Longitude', color=selected_value,
+                fig_map = px.scatter_map(df, lat='Latitude', lon='Longitude', color=selected_value,
                                             zoom=10, height=500, color_continuous_scale=color_scale,
                                             color_continuous_midpoint=color_continuous_midpoint,
                                             hover_data=df.columns)
