@@ -73,7 +73,7 @@ app.layout = html.Div([
     ),
     html.A(
         className="github-fab",
-        href="https://github.com/alessandrodd/torque_logs_visualizer",
+        href="https://github.com/rdlxs/python_curso/tree/main/Ejemplos",
         target="_blank",
         children=html.I(className="fab fa-github fa-2x"),
         style={
