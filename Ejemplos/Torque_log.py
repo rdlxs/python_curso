@@ -5,7 +5,6 @@ import plotly.express as px
 from dash import Dash, html, dcc, Input, Output, State, callback_context, dash_table
 import dash_loading_spinners as dls
 import numpy as np
-from fpdf import FPDF
 
 FA = "https://use.fontawesome.com/releases/v5.8.1/css/all.css"
 
@@ -19,6 +18,7 @@ def parse_contents(contents):
     content_type, content_string = contents.split(',')
     decoded = base64.b64decode(content_string)
     try:
+        # Intentar leer como CSV sin validar content_type
         csv_string = decoded.decode('utf-8')
         csv_string_no_dup_header = remove_duplicate_header(csv_string)
         df = pd.read_csv(io.StringIO(csv_string_no_dup_header), skipinitialspace=True, na_values=["-"])
@@ -43,7 +43,7 @@ def parse_contents(contents):
         print(e)
         return None, 'There was an error processing the file.'
     
-    # Conversión de velocidad a km/h
+     # Conversión de velocidad a km/h
     if "GPS Speed (Meters/second)" in df.columns:
         df["GPS Speed (km/h)"] = df["GPS Speed (Meters/second)"] * 3.6
     
@@ -63,14 +63,13 @@ app.layout = html.Div([
         },
         multiple=False
     ),
-    dls.Ring(
-        id="loading-spinner",
-        children=html.Div(id='output-data-upload', style={'margin': '20px 0'}),
-    ),
     dcc.Dropdown(
         id='value-dropdown',
         placeholder='Select a value...',
         style={'margin': '10px 0'}
+    ),
+    dls.Ring(
+        html.Div(id='output-data-upload', style={'margin': '20px 0'}),
     ),
     html.A(
         className="github-fab",
@@ -89,8 +88,7 @@ app.layout = html.Div([
 
 @app.callback(
     [Output('output-data-upload', 'children'),
-     Output('value-dropdown', 'options'),
-     Output('loading-spinner', 'children')],
+     Output('value-dropdown', 'options')],
     [Input('upload-data', 'contents'),
      Input('value-dropdown', 'value')]
 )
@@ -98,10 +96,9 @@ def update_output(list_of_contents, selected_value):
     triggered_by = [p['prop_id'] for p in callback_context.triggered][0]
 
     if list_of_contents:
-        # Mostrar el icono de carga mientras se procesa el archivo
         df, error_message = parse_contents(list_of_contents)
         if df is None:
-            return html.Div(error_message, style={'color': 'red'}), [], None
+            return html.Div(error_message, style={'color': 'red'}), []
 
         time_column = "Time" if "Time" in df.columns else None
         valid_columns = [col for col in df.columns if df[col].dtype in ['float64', 'int64']]
@@ -155,7 +152,6 @@ def update_output(list_of_contents, selected_value):
 
             stats_df = pd.DataFrame(statistics)
 
-            # Ocultar el icono de carga
             return html.Div([
                 map_fig,
                 dcc.Graph(id='time-series', figure=fig_time_series),
@@ -168,35 +164,9 @@ def update_output(list_of_contents, selected_value):
                         {'if': {'row_index': 'odd'}, 'backgroundColor': 'rgb(248, 248, 248)'}
                     ]
                 )
-            ]), dropdown_options, None
+            ]), dropdown_options
 
-    return "No file uploaded.", [], None
+    return "No file uploaded.", []
 
-# Función para generar el PDF
-def create_pdf(fig, statistics):
-    # Crear un objeto PDF
-    pdf = FPDF()
-    pdf.add_page()
-
-    # Insertar el gráfico como imagen
-    fig.write_image("/mnt/data/temp_plot.png")
-    pdf.image("/mnt/data/temp_plot.png", x=10, y=10, w=190)
-
-    # Establecer la fuente para los textos
-    pdf.set_font("Arial", size=12)
-
-    # Posicionar la tabla de estadísticas
-    pdf.ln(120)  # Dejar espacio para el gráfico
-    pdf.cell(200, 10, txt="Statistics:", ln=True)
-
-    # Insertar las estadísticas
-    for stat, value in zip(statistics['Statistic'], statistics['Value']):
-        pdf.cell(200, 10, txt=f"{stat}: {value}", ln=True)
-
-    # Guardar el PDF
-    pdf.output("/mnt/data/output.pdf")
-
-# Ejecución del servidor
 if __name__ == '__main__':
-    app.run(debug=False)
-
+    app.run_server(debug=False)
