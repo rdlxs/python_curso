@@ -44,8 +44,8 @@ def parse_contents(contents):
         return None, 'There was an error processing the file.'
     
      # Conversión de velocidad a km/h
-    if "GPS Speed (Meters/Second)" in df.columns:
-        df["GPS Speed (km/h)"] = df["GPS Speed (Meters/Second)"] * 3.6
+    if "GPS Speed (Meters/second)" in df.columns:
+        df["GPS Speed (km/h)"] = df["GPS Speed (Meters/second)"] * 3.6
     
     return df, ''
 
