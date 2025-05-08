@@ -105,8 +105,10 @@ def update_output(list_of_contents, selected_value):
         dropdown_options = [{'label': col, 'value': col} for col in valid_columns]
 
         if 'upload-data' in triggered_by and valid_columns:
-            selected_value = valid_columns[0]
-
+            if "GPS Speed (km/h)" in valid_columns:
+                selected_value = "GPS Speed (km/h)"
+            else:
+                selected_value = valid_columns[0]
         if selected_value:
             if any(df[selected_value] < 0) and any(df[selected_value] > 0):
                 color_scale = px.colors.sequential.RdBu
