@@ -169,4 +169,4 @@ def update_output(list_of_contents, selected_value):
     return "No file uploaded.", []
 
 if __name__ == '__main__':
-    app.run_server(debug=False)
+    app.run(debug=False)
