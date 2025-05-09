@@ -113,7 +113,7 @@ def update_graphs(data_json, selected_value):
     if not data_json or not selected_value:
         return html.Div("No data to display yet.")
 
-    df = pd.read_json(data_json, orient='split')
+    df = pd.read_json(io.StringIO(data_json), orient='split')
     time_column = "Time" if "Time" in df.columns else None
 
     if any(df[selected_value] < 0) and any(df[selected_value] > 0):
