@@ -2,7 +2,7 @@ import base64
 import io
 import pandas as pd
 import plotly.express as px
-from dash import Dash, html, dcc, Input, Output, State, callback_context, dash_table, ctx
+from dash import Dash, html, dcc, Input, Output, State, callback_context, dash_table
 import dash_loading_spinners as dls
 import numpy as np
 import tempfile
@@ -43,7 +43,8 @@ def parse_contents(contents):
     except Exception as e:
         print(e)
         return None, 'There was an error processing the file.'
-
+    
+     # Conversión de velocidad a km/h
     if "GPS Speed (Meters/second)" in df.columns:
         df["GPS Speed (km/h)"] = df["GPS Speed (Meters/second)"] * 3.6
 
@@ -76,11 +77,10 @@ app.layout = html.Div([
         target="_blank",
         children=html.I(className="fab fa-github fa-2x"),
         style={
-            'position': 'fixed', 'bottom': '20px', 'right': '20px',
-            'display': 'flex', 'alignItems': 'center', 'justifyContent': 'center',
-            'color': 'white', 'backgroundColor': '#000', 'borderRadius': '50%',
-            'width': '50px', 'height': '50px', 'textAlign': 'center',
-            'textDecoration': 'none', 'boxShadow': '2px 2px 3px rgba(0,0,0,0.2)',
+            'position': 'fixed', 'bottom': '20px', 'right': '20px', 'display': 'flex',
+            'alignItems': 'center', 'justifyContent': 'center', 'color': 'white',
+            'backgroundColor': '#000', 'borderRadius': '50%', 'width': '50px', 'height': '50px',
+            'textAlign': 'center', 'textDecoration': 'none', 'boxShadow': '2px 2px 3px rgba(0,0,0,0.2)',
         }
     ),
 ])
@@ -92,15 +92,22 @@ app.layout = html.Div([
      Input('value-dropdown', 'value')]
 )
 def update_output(list_of_contents, selected_value):
-    triggered_by = [p['prop_id'] for p in callback_context.triggered][0]
-
+    print("Callback triggered")
+    
+    # Verificamos si el archivo fue cargado
     if list_of_contents:
         df, error_message = parse_contents(list_of_contents)
         if df is None:
             return html.Div(error_message, style={'color': 'red'}), []
+        
+        # Imprimir las columnas del dataframe para verificar
+        print("Dataframe loaded:")
+        print(df.columns)  # Verifica si el DataFrame tiene las columnas correctas
+        print(df.head())  # Imprimir las primeras filas para ver el contenido
 
-        time_column = "Time" if "Time" in df.columns else None
+        # Si hay columnas válidas para el dropdown
         valid_columns = [col for col in df.columns if df[col].dtype in ['float64', 'int64']]
+        print(f"Valid columns for dropdown: {valid_columns}")  # Verificar columnas válidas
         dropdown_options = [{'label': col, 'value': col} for col in valid_columns]
 
         if 'upload-data' in triggered_by and valid_columns:
@@ -109,20 +116,26 @@ def update_output(list_of_contents, selected_value):
             else:
                 selected_value = valid_columns[0]
         if selected_value:
-            color_scale = px.colors.sequential.RdBu if any(df[selected_value] < 0) and any(df[selected_value] > 0) else px.colors.sequential.Jet
-            midpoint = 0 if color_scale == px.colors.sequential.RdBu else None
+            if any(df[selected_value] < 0) and any(df[selected_value] > 0):
+                color_scale = px.colors.sequential.RdBu
+                color_continuous_midpoint = 0
+            else:
+                color_scale = px.colors.sequential.Jet
+                color_continuous_midpoint = None
 
+            # Validar columnas GPS
             if 'Latitude' in df.columns and 'Longitude' in df.columns:
-                fig_map = px.scatter_map(df, lat='Latitude', lon='Longitude', color=selected_value,
+                fig_map = px.scatter_mapbox(df, lat='Latitude', lon='Longitude', color=selected_value,
                                             zoom=10, height=500, color_continuous_scale=color_scale,
-                                            color_continuous_midpoint=midpoint,
-                                            hover_data={**{c: True for c in df.columns if c != 'GPS Speed (Meters/second)'}})
-                fig_map.update_layout(map_style="open-street-map", margin={"r": 0, "t": 0, "l": 0, "b": 0})
+                                            color_continuous_midpoint=color_continuous_midpoint,
+                                            hover_data=df.columns)
+                fig_map.update_layout(mapbox_style="open-street-map", margin={"r": 0, "t": 0, "l": 0, "b": 0})
                 map_fig = dcc.Graph(id='map-plot', figure=fig_map)
             else:
                 map_fig = html.Div("⚠️ El archivo no contiene columnas 'Latitude' y 'Longitude'. No se puede mostrar el mapa.",
                                    style={'color': 'orange', 'marginBottom': '10px'})
 
+            # Gráfico de serie temporal
             if time_column:
                 fig_time_series = px.line(df, x=time_column, y=selected_value, title=f'{selected_value} over Time')
                 fig_time_series.update_traces(mode='lines')
@@ -130,36 +143,38 @@ def update_output(list_of_contents, selected_value):
             else:
                 fig_time_series = None
 
-            statistics = {
-                'Statistic': ['Average', 'Maximum', 'Minimum', 'Start', 'End',
-                              '25th Percentile', 'Median', '75th Percentile', '90th Percentile'],
-                'Value': [
-                    df[selected_value].mean(), df[selected_value].max(), df[selected_value].min(),
-                    df[selected_value].iloc[0], df[selected_value].iloc[-1],
-                    np.percentile(df[selected_value].dropna(), 25),
-                    np.percentile(df[selected_value].dropna(), 50),
-                    np.percentile(df[selected_value].dropna(), 75),
-                    np.percentile(df[selected_value].dropna(), 90)
-                ]
-            }
+        # Estadísticas
+        statistics = {
+            'Statistic': ['Average', 'Maximum', 'Minimum', 'Start', 'End',
+                          '25th Percentile', 'Median', '75th Percentile', '90th Percentile'],
+            'Value': [
+                df[selected_value].mean(), df[selected_value].max(), df[selected_value].min(),
+                df[selected_value].iloc[0], df[selected_value].iloc[-1],
+                np.percentile(df[selected_value].dropna(), 25),
+                np.percentile(df[selected_value].dropna(), 50),
+                np.percentile(df[selected_value].dropna(), 75),
+                np.percentile(df[selected_value].dropna(), 90)
+            ]
+        }
 
-            stats_df = pd.DataFrame(statistics)
+        stats_df = pd.DataFrame(statistics)
 
-            return html.Div([
-                map_fig,
-                dcc.Graph(id='time-series', figure=fig_time_series),
-                dash_table.DataTable(
-                    data=stats_df.to_dict('records'),
-                    columns=[{'id': c, 'name': c} for c in stats_df.columns],
-                    style_cell={'textAlign': 'left'},
-                    style_header={'backgroundColor': 'white', 'fontWeight': 'bold'},
-                    style_data_conditional=[
-                        {'if': {'row_index': 'odd'}, 'backgroundColor': 'rgb(248, 248, 248)'}
-                    ]
-                )
-            ]), dropdown_options
+        return html.Div([
+            map_fig,
+            dcc.Graph(id='time-series', figure=fig_time_series),
+            dash_table.DataTable(
+                data=stats_df.to_dict('records'),
+                columns=[{'id': c, 'name': c} for c in stats_df.columns],
+                style_cell={'textAlign': 'left'},
+                style_header={'backgroundColor': 'white', 'fontWeight': 'bold'},
+                style_data_conditional=[
+                    {'if': {'row_index': 'odd'}, 'backgroundColor': 'rgb(248, 248, 248)'}
+                ],
+                style_table={'height': '350px', 'overflowY': 'auto'},
+            )
+        ]), dropdown_options
 
-    return "No file uploaded.", []
+    return html.Div('Please upload a CSV file.'), []
 
 @app.callback(
     Output("download-pdf", "data"),
