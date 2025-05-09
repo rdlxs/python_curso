@@ -18,7 +18,6 @@ def parse_contents(contents):
     content_type, content_string = contents.split(',')
     decoded = base64.b64decode(content_string)
     try:
-        # Intentar leer como CSV sin validar content_type
         csv_string = decoded.decode('utf-8')
         csv_string_no_dup_header = remove_duplicate_header(csv_string)
         df = pd.read_csv(io.StringIO(csv_string_no_dup_header), skipinitialspace=True, na_values=["-"])
@@ -42,13 +41,11 @@ def parse_contents(contents):
     except Exception as e:
         print(e)
         return None, 'There was an error processing the file.'
-    
-     # Conversión de velocidad a km/h
+
     if "GPS Speed (Meters/second)" in df.columns:
         df["GPS Speed (km/h)"] = df["GPS Speed (Meters/second)"] * 3.6
     
     return df, ''
-
 
 app = Dash(__name__, external_stylesheets=[FA], title="Torque Logs Visualizer")
 
@@ -68,6 +65,7 @@ app.layout = html.Div([
         placeholder='Select a value...',
         style={'margin': '10px 0'}
     ),
+    dcc.Store(id='stored-data'),
     dls.Ring(
         html.Div(id='output-data-upload', style={'margin': '20px 0'}),
     ),
@@ -87,86 +85,86 @@ app.layout = html.Div([
 ])
 
 @app.callback(
-    [Output('output-data-upload', 'children'),
-     Output('value-dropdown', 'options')],
-    [Input('upload-data', 'contents'),
+    [Output('stored-data', 'data'),
+     Output('value-dropdown', 'options'),
+     Output('value-dropdown', 'value')],
+    Input('upload-data', 'contents')
+)
+def parse_and_store(contents):
+    if contents:
+        df, error = parse_contents(contents)
+        if df is None:
+            return dash.no_update, [], None
+
+        valid_columns = [col for col in df.columns if df[col].dtype in ['float64', 'int64']]
+        options = [{'label': col, 'value': col} for col in valid_columns]
+        default_value = "GPS Speed (km/h)" if "GPS Speed (km/h)" in valid_columns else (valid_columns[0] if valid_columns else None)
+
+        return df.to_json(date_format='iso', orient='split'), options, default_value
+
+    return None, [], None
+
+@app.callback(
+    Output('output-data-upload', 'children'),
+    [Input('stored-data', 'data'),
      Input('value-dropdown', 'value')]
 )
-def update_output(list_of_contents, selected_value):
-    triggered_by = [p['prop_id'] for p in callback_context.triggered][0]
+def update_graphs(data_json, selected_value):
+    if not data_json or not selected_value:
+        return html.Div("No data to display yet.")
 
-    if list_of_contents:
-        df, error_message = parse_contents(list_of_contents)
-        if df is None:
-            return html.Div(error_message, style={'color': 'red'}), []
+    df = pd.read_json(data_json, orient='split')
+    time_column = "Time" if "Time" in df.columns else None
 
-        time_column = "Time" if "Time" in df.columns else None
-        valid_columns = [col for col in df.columns if df[col].dtype in ['float64', 'int64']]
-        dropdown_options = [{'label': col, 'value': col} for col in valid_columns]
+    if any(df[selected_value] < 0) and any(df[selected_value] > 0):
+        color_scale = px.colors.sequential.RdBu
+        color_continuous_midpoint = 0
+    else:
+        color_scale = px.colors.sequential.Jet
+        color_continuous_midpoint = None
 
-        if 'upload-data' in triggered_by and valid_columns:
-            if "GPS Speed (km/h)" in valid_columns:
-                selected_value = "GPS Speed (km/h)"
-            else:
-                selected_value = valid_columns[0]
-        if selected_value:
-            if any(df[selected_value] < 0) and any(df[selected_value] > 0):
-                color_scale = px.colors.sequential.RdBu
-                color_continuous_midpoint = 0
-            else:
-                color_scale = px.colors.sequential.Jet
-                color_continuous_midpoint = None
+    if 'Latitude' in df.columns and 'Longitude' in df.columns:
+        fig_map = px.scatter_map(df, lat='Latitude', lon='Longitude', color=selected_value,
+                                 zoom=10, height=500, color_continuous_scale=color_scale,
+                                 color_continuous_midpoint=color_continuous_midpoint,
+                                 hover_data=df.columns)
+        fig_map.update_layout(map_style="open-street-map", margin={"r": 0, "t": 0, "l": 0, "b": 0})
+        map_fig = dcc.Graph(id='map-plot', figure=fig_map)
+    else:
+        map_fig = html.Div("⚠️ No hay columnas 'Latitude' y 'Longitude'.", style={'color': 'orange'})
 
-            # Validar columnas GPS
-            if 'Latitude' in df.columns and 'Longitude' in df.columns:
-                fig_map = px.scatter_map(df, lat='Latitude', lon='Longitude', color=selected_value,
-                                            zoom=10, height=500, color_continuous_scale=color_scale,
-                                            color_continuous_midpoint=color_continuous_midpoint,
-                                            hover_data=df.columns)
-                fig_map.update_layout(map_style="open-street-map", margin={"r": 0, "t": 0, "l": 0, "b": 0})
-                map_fig = dcc.Graph(id='map-plot', figure=fig_map)
-            else:
-                map_fig = html.Div("⚠️ El archivo no contiene columnas 'Latitude' y 'Longitude'. No se puede mostrar el mapa.",
-                                   style={'color': 'orange', 'marginBottom': '10px'})
+    fig_time_series = None
+    if time_column:
+        fig_time_series = px.line(df, x=time_column, y=selected_value, title=f'{selected_value} over Time')
+        fig_time_series.update_traces(mode='lines')
+        fig_time_series.update_layout(hovermode='closest')
 
-            # Gráfico de serie temporal
-            if time_column:
-                fig_time_series = px.line(df, x=time_column, y=selected_value, title=f'{selected_value} over Time')
-                fig_time_series.update_traces(mode='lines')
-                fig_time_series.update_layout(hovermode='closest')
-            else:
-                fig_time_series = None
+    stats_df = pd.DataFrame({
+        'Statistic': ['Average', 'Maximum', 'Minimum', 'Start', 'End',
+                      '25th Percentile', 'Median', '75th Percentile', '90th Percentile'],
+        'Value': [
+            df[selected_value].mean(), df[selected_value].max(), df[selected_value].min(),
+            df[selected_value].iloc[0], df[selected_value].iloc[-1],
+            np.percentile(df[selected_value].dropna(), 25),
+            np.percentile(df[selected_value].dropna(), 50),
+            np.percentile(df[selected_value].dropna(), 75),
+            np.percentile(df[selected_value].dropna(), 90)
+        ]
+    })
 
-            statistics = {
-                'Statistic': ['Average', 'Maximum', 'Minimum', 'Start', 'End',
-                              '25th Percentile', 'Median', '75th Percentile', '90th Percentile'],
-                'Value': [
-                    df[selected_value].mean(), df[selected_value].max(), df[selected_value].min(),
-                    df[selected_value].iloc[0], df[selected_value].iloc[-1],
-                    np.percentile(df[selected_value].dropna(), 25),
-                    np.percentile(df[selected_value].dropna(), 50),
-                    np.percentile(df[selected_value].dropna(), 75),
-                    np.percentile(df[selected_value].dropna(), 90)
-                ]
-            }
-
-            stats_df = pd.DataFrame(statistics)
-
-            return html.Div([
-                map_fig,
-                dcc.Graph(id='time-series', figure=fig_time_series),
-                dash_table.DataTable(
-                    data=stats_df.to_dict('records'),
-                    columns=[{'id': c, 'name': c} for c in stats_df.columns],
-                    style_cell={'textAlign': 'left'},
-                    style_header={'backgroundColor': 'white', 'fontWeight': 'bold'},
-                    style_data_conditional=[
-                        {'if': {'row_index': 'odd'}, 'backgroundColor': 'rgb(248, 248, 248)'}
-                    ]
-                )
-            ]), dropdown_options
-
-    return "No file uploaded.", []
+    return html.Div([
+        map_fig,
+        dcc.Graph(id='time-series', figure=fig_time_series),
+        dash_table.DataTable(
+            data=stats_df.to_dict('records'),
+            columns=[{'id': c, 'name': c} for c in stats_df.columns],
+            style_cell={'textAlign': 'left'},
+            style_header={'backgroundColor': 'white', 'fontWeight': 'bold'},
+            style_data_conditional=[
+                {'if': {'row_index': 'odd'}, 'backgroundColor': 'rgb(248, 248, 248)'}
+            ]
+        )
+    ])
 
 if __name__ == '__main__':
     app.run(debug=False)
