@@ -62,11 +62,24 @@ def update_output(contents, selected_metric, hover_columns):
 
     df = parse_contents(contents)
 
-    metric_options = [{'label': col, 'value': col} for col in df.columns if df[col].dtype in ['float64', 'int64']]
+    # Columnas a excluir de métricas y hover
+    excluir_columnas = [
+        'Latitude', 'Longitude',
+        'Horizontal Dilution of Precision', 'Bearing',
+        'G(x)', 'G(y)', 'G(z)', 'G(calibrated)'
+    ]
 
-    # Excluir lat/lon del hover
-    hover_exclude = ['Latitude', 'Longitude']
-    hover_options = [{'label': col, 'value': col} for col in df.columns if col not in hover_exclude]
+    metric_options = [
+        {'label': col, 'value': col}
+        for col in df.columns
+        if df[col].dtype in ['float64', 'int64'] and col not in excluir_columnas
+    ]
+
+    hover_options = [
+        {'label': col, 'value': col}
+        for col in df.columns
+        if col not in excluir_columnas
+    ]
 
     if selected_metric is None and metric_options:
         selected_metric = metric_options[0]['value']
@@ -91,7 +104,7 @@ def update_output(contents, selected_metric, hover_columns):
             height=500,
             color_continuous_scale=color_scale,
             color_continuous_midpoint=midpoint,
-            hover_data=[col for col in hover_columns if col in df.columns and col not in hover_exclude]
+            hover_data=[col for col in hover_columns if col in df.columns and col not in excluir_columnas]
         )
 
         fig_map.update_layout(
@@ -128,7 +141,6 @@ def update_output(contents, selected_metric, hover_columns):
     if selected_metric:
         col_data = df[selected_metric].dropna()
 
-        # Agregar unidades por métrica
         unidades = {
             'GPS Speed (Kilometers/hour)': 'km/h',
             'Engine RPM(rpm)': 'rpm',
@@ -157,16 +169,42 @@ def update_output(contents, selected_metric, hover_columns):
 
         stats_table = dash_table.DataTable(
             data=stats_data.to_dict('records'),
-            columns=[{"name": i, "id": i} for i in stats_data.columns],
-            style_table={'maxHeight': '300px', 'overflowY': 'auto'},
-            style_cell={'padding': '6px', 'fontSize': '14px'},
+            columns=[
+                {"name": "Statistic", "id": "Statistic"},
+                {"name": "Value", "id": "Value", "type": "numeric", "format": {"specifier": ".2f"}},
+                {"name": "Unit", "id": "Unit"}
+            ],
+            style_table={
+                'maxHeight': '300px',
+                'overflowY': 'auto',
+                'width': '400px'
+            },
+            style_cell={
+                'padding': '6px',
+                'fontSize': '14px',
+                'whiteSpace': 'normal',
+            },
             style_cell_conditional=[
-                {'if': {'column_id': 'Statistic'}, 'textAlign': 'left', 'width': '70px'},
-                {'if': {'column_id': 'Value'}, 'textAlign': 'right', 'width': '100px'},
-                {'if': {'column_id': 'Unit'}, 'textAlign': 'left', 'width': '60px'}
-],
-
-            style_header={'fontWeight': 'bold'}
+                {
+                    'if': {'column_id': 'Statistic'},
+                    'textAlign': 'left',
+                    'minWidth': '180px', 'width': '180px', 'maxWidth': '180px',
+                },
+                {
+                    'if': {'column_id': 'Value'},
+                    'textAlign': 'right',
+                    'minWidth': '100px', 'width': '100px', 'maxWidth': '100px',
+                },
+                {
+                    'if': {'column_id': 'Unit'},
+                    'textAlign': 'left',
+                    'minWidth': '60px', 'width': '60px', 'maxWidth': '60px',
+                }
+            ],
+            style_header={
+                'fontWeight': 'bold',
+                'backgroundColor': 'white'
+            }
         )
     else:
         stats_table = html.Div("⚠️ No se pudo calcular estadísticas.")
