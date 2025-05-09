@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 from dash import Dash, html, dcc, Input, Output, dash_table, State, no_update
+import re
 
 app = Dash(__name__)
 app.title = "Torque Log Visualizer"
@@ -21,14 +22,6 @@ app.layout = html.Div([
                 'textAlign': 'center', 'margin': '10px 0'
             },
             multiple=False
-        ),
-
-        html.Label("Modo oscuro", style={'marginTop': '20px'}),
-        dcc.Checklist(
-            id='dark-mode-toggle',
-            options=[{'label': 'Activar', 'value': 'dark'}],
-            value=[],
-            labelStyle={'display': 'inline-block', 'marginRight': '10px'}
         ),
 
         html.Hr(),
@@ -126,10 +119,9 @@ def populate_variable_table(contents):
 @app.callback(
     Output('output-visuals', 'children'),
     [Input('upload-data', 'contents'),
-     Input('variable-usage-table', 'data'),
-     Input('dark-mode-toggle', 'value')]
+     Input('variable-usage-table', 'data')]
 )
-def update_visuals(contents, usage_data, dark_mode):
+def update_visuals(contents, usage_data):
     if not contents or not usage_data:
         return html.Div("📤 Subí un archivo y seleccioná al menos una variable."),
 
@@ -137,13 +129,6 @@ def update_visuals(contents, usage_data, dark_mode):
 
     metrica = next((item['Variable'] for item in usage_data if item['Uso'] == 'metrica'), None)
     hover_columns = [item['Variable'] for item in usage_data if item['Uso'] == 'hover']
-
-    is_dark = 'dark' in (dark_mode or [])
-    dark_style = {
-        'backgroundColor': '#1e1e1e' if is_dark else 'white',
-        'color': 'white' if is_dark else 'black',
-        'padding': '20px'
-    }
 
     if not metrica:
         return html.Div("⚠️ No seleccionaste ninguna variable como métrica."),
@@ -159,8 +144,7 @@ def update_visuals(contents, usage_data, dark_mode):
             color_continuous_scale='Jet',
             hover_data=[col for col in hover_columns if col in df.columns]
         )
-        map_style = "carto-darkmatter" if is_dark else "carto-positron"
-        fig_map.update_layout(mapbox={"style": map_style}, margin={"r": 0, "t": 0, "l": 0, "b": 0})
+        fig_map.update_layout(mapbox={"style": "carto-positron"}, margin={"r": 0, "t": 0, "l": 0, "b": 0})
 
         map_graph = dcc.Graph(figure=fig_map, config={
             'displayModeBar': 'hover',
@@ -174,6 +158,9 @@ def update_visuals(contents, usage_data, dark_mode):
     fig_time = px.line(df.dropna(subset=[metrica]), x='Time', y=metrica, title=f"{metrica} en el tiempo")
 
     col_data = df[metrica].dropna()
+    match = re.search(r'\(([^()]*)\)\s*$', metrica)
+    unidad = match.group(1) if match else ''
+
     stats_data = pd.DataFrame({
         'Statistic': ['Mean', 'Max', 'Min', 'Start', 'End', '25%', '50%', '75%', '90%'],
         'Value': [
@@ -183,26 +170,32 @@ def update_visuals(contents, usage_data, dark_mode):
             np.percentile(col_data, 50),
             np.percentile(col_data, 75),
             np.percentile(col_data, 90)
-        ]
+        ],
+        'Unit': [unidad] * 9
     })
 
     stats_table = dash_table.DataTable(
         data=stats_data.to_dict('records'),
         columns=[
             {"name": "Statistic", "id": "Statistic"},
-            {"name": "Value", "id": "Value", "type": "numeric", "format": {"specifier": ".2f"}}
+            {"name": "Value", "id": "Value", "type": "numeric", "format": {"specifier": ".2f"}},
+            {"name": "Unit", "id": "Unit"}
         ],
         style_table={'maxHeight': '300px', 'overflowY': 'auto', 'width': '400px'},
         style_cell={
             'padding': '6px',
             'fontSize': '14px',
-            'whiteSpace': 'normal',
-            'textAlign': 'left'
+            'whiteSpace': 'normal'
         },
+        style_cell_conditional=[
+            {'if': {'column_id': 'Statistic'}, 'textAlign': 'left', 'minWidth': '180px', 'width': '180px', 'maxWidth': '180px'},
+            {'if': {'column_id': 'Value'}, 'textAlign': 'right', 'minWidth': '100px', 'width': '100px', 'maxWidth': '100px'},
+            {'if': {'column_id': 'Unit'}, 'textAlign': 'left', 'minWidth': '60px', 'width': '60px', 'maxWidth': '60px'}
+        ],
         style_header={
             'fontWeight': 'bold',
-            'backgroundColor': '#333' if is_dark else 'white',
-            'color': 'white' if is_dark else 'black'
+            'backgroundColor': 'white',
+            'color': 'black'
         }
     )
 
@@ -217,7 +210,7 @@ def update_visuals(contents, usage_data, dark_mode):
             html.H4("📊 Estadísticas"),
             stats_table
         ], style={'marginTop': '40px'})
-    ], style=dark_style)
+    ], style={'padding': '20px'})
 
 if __name__ == '__main__':
     app.run(debug=False)
