@@ -173,7 +173,7 @@ def update_visuals(contents, metrica, hover_columns):
         html.Div([
             html.H4("📈 Métrica temporal"),
             dcc.Graph(figure=fig_time)
-        ], style={'marginTop': '40px'}),
+        ], style={'marginTop': '80px'}),
         html.Div([
             html.H4("📊 Estadísticas"),
             stats_table
