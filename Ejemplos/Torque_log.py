@@ -103,7 +103,7 @@ def update_output(contents, selected_metric, hover_columns):
                 'displaylogo': False,
                 'modeBarButtonsToAdd': ['zoom2d', 'pan2d', 'resetViewMapbox'],
                 'modeBarStyle': {
-                    'top': '40px',
+                    'top': '80px',
                     'right': '20px'
                 }
             }
