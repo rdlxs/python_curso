@@ -161,9 +161,9 @@ def update_output(contents, selected_metric, hover_columns):
             style_table={'maxHeight': '300px', 'overflowY': 'auto'},
             style_cell={'padding': '6px', 'fontSize': '14px'},
             style_cell_conditional=[
-                {'if': {'column_id': 'Statistic'}, 'textAlign': 'left'},
-        {'if': {'column_id': 'Value'}, 'textAlign': 'right', 'width': '100px'},
-        {'if': {'column_id': 'Unit'}, 'textAlign': 'left', 'width': '60px'}
+                {'if': {'column_id': 'Statistic'}, 'textAlign': 'left', 'width': '70px'},
+                {'if': {'column_id': 'Value'}, 'textAlign': 'right', 'width': '100px'},
+                {'if': {'column_id': 'Unit'}, 'textAlign': 'left', 'width': '60px'}
 ],
 
             style_header={'fontWeight': 'bold'}
