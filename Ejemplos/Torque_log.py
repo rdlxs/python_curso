@@ -3,7 +3,7 @@ import io
 import pandas as pd
 import numpy as np
 import plotly.express as px
-from dash import Dash, html, dcc, Input, Output, dash_table, State, no_update, ctx, callback_context
+from dash import Dash, html, dcc, Input, Output, dash_table, State, no_update
 import re
 
 app = Dash(__name__)
@@ -62,7 +62,7 @@ def parse_contents(contents):
 
     if "GPS Speed (Meters/second)" in df.columns:
         df["GPS Speed (Kilometers/hour)"] = df["GPS Speed (Meters/second)"] * 3.6
-        df.drop(columns=["GPS Speed (Meters/second)"] , inplace=True)
+        df.drop(columns=["GPS Speed (Meters/second)"], inplace=True)
 
     return df
 
@@ -98,24 +98,17 @@ def render_variable_checklists(contents):
             id='hover-checklist',
             options=[{'label': var, 'value': var} for var in variables],
             labelStyle={'display': 'block', 'margin': '2px 0'}
-        ),
-        html.Br(),
-        html.Label("Seleccionar variables para graficar contra el tiempo:"),
-        dcc.Checklist(
-            id='multi-timeseries-vars',
-            options=[{'label': var, 'value': var} for var in variables],
-            labelStyle={'display': 'block', 'margin': '2px 0'}
         )
     ])
+
 
 @app.callback(
     Output('output-visuals', 'children'),
     [Input('upload-data', 'contents'),
      Input('metric-radio', 'value'),
-     Input('hover-checklist', 'value'),
-     Input('multi-timeseries-vars', 'value')]
+     Input('hover-checklist', 'value')]
 )
-def update_visuals(contents, metrica, hover_columns, timeseries_vars):
+def update_visuals(contents, metrica, hover_columns):
     if not contents or not metrica:
         return html.Div("📤 Subí un archivo y seleccioná una métrica."),
 
@@ -147,26 +140,6 @@ def update_visuals(contents, metrica, hover_columns, timeseries_vars):
     # Single metric time plot
     fig_time = px.line(df.dropna(subset=[metrica]), x='Time', y=metrica, title=f"{metrica} en el tiempo")
     fig_time.update_layout(font=dict(size=12, family="Inter"))
-
-    # Gráfico de múltiples variables en el mismo gráfico de tiempo
-    multi_graph = html.Div("Seleccioná variables para comparar.")
-    if timeseries_vars:
-        df_multi = df[['Time'] + timeseries_vars].dropna()
-        fig_multi = px.line(df_multi, x='Time', y=timeseries_vars, title="Métricas seleccionadas vs. Tiempo")
-        fig_multi.update_traces(mode='lines+markers')
-        fig_multi.update_layout(legend=dict(title='Variable', orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1))
-        fig_multi.update_layout(font=dict(size=12, family="Inter"))
-        multi_graph = dcc.Graph(figure=fig_multi, config={
-            'toImageButtonOptions': {
-                'format': 'png',
-                'filename': 'comparativa_variables',
-                'height': 600,
-                'width': 1000,
-                'scale': 2
-            },
-            'modeBarButtonsToAdd': ['toImage'],
-            'displaylogo': False
-        })
 
     col_data = df[metrica].dropna()
     match = re.search(r'\(([^()]*)\)\s*$', metrica)
@@ -216,18 +189,15 @@ def update_visuals(contents, metrica, hover_columns, timeseries_vars):
         html.H4("📍 Mapa del recorrido"),
         map_graph,
         html.Div([
-        html.H4("📈 Métrica temporal"),
-        dcc.Graph(figure=fig_time)
-    ], style={'marginTop': '80px'}),
-        html.Div([
-            html.H4("📉 Comparativa de variables seleccionadas"),
-            multi_graph if multi_graph else html.Div("Seleccioná variables para comparar.")
+            html.H4("📈 Métrica temporal"),
+            dcc.Graph(figure=fig_time)
         ], style={'marginTop': '80px'}),
         html.Div([
-        html.H4("📊 Estadísticas"),
+            html.H4("📊 Estadísticas"),
             stats_table
-        ], style={'marginTop': '40px'})
+        ], style={'marginTop': '80px'})
     ], style={'padding': '20px'})
+
 
 @app.callback(
     Output("download-dataframe-xlsx", "data"),
@@ -238,6 +208,7 @@ def download_excel(n_clicks):
     if 'data' in stored_df:
         return dcc.send_data_frame(stored_df['data'].to_excel, "torque_log.xlsx", index=False)
     return no_update
+
 
 if __name__ == '__main__':
     app.run(debug=False)
