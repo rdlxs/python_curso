@@ -154,17 +154,22 @@ def update_visuals(contents, metrica, hover_columns, timeseries_vars):
         df_melt = df[['Time'] + timeseries_vars].melt(id_vars='Time', var_name='Variable', value_name='Valor')
         fig_multi = px.line(df_melt.dropna(), x='Time', y='Valor', color='Variable', title="Variables seleccionadas en el tiempo")
         fig_multi.update_layout(font=dict(size=12, family="Inter"))
+        # COMPARATIVA_FALLBACK: gráfico de comparativa o mensaje de error si falla
+    if not df_melt.dropna().empty:
         multi_graph = dcc.Graph(figure=fig_multi, config={
-            'toImageButtonOptions': {
-                'format': 'png',
-                'filename': 'comparativa_variables',
-                'height': 600,
-                'width': 1000,
-                'scale': 2
-            },
-            'modeBarButtonsToAdd': ['toImage'],
-            'displaylogo': False
-        })
+        'toImageButtonOptions': {
+            'format': 'png',
+            'filename': 'comparativa_variables',
+            'height': 600,
+            'width': 1000,
+            'scale': 2
+        },
+        'modeBarButtonsToAdd': ['toImage'],
+        'displaylogo': False
+    })
+    else:
+        multi_graph = html.Div("⚠️ No hay suficientes datos válidos para mostrar la comparativa.",
+                           style={'color': 'red', 'marginTop': '10px'})
 
     col_data = df[metrica].dropna()
     match = re.search(r'\(([^()]*)\)\s*$', metrica)
