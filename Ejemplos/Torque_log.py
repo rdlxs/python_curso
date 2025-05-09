@@ -44,9 +44,10 @@ def parse_contents(contents):
         except:
             df["Time"] = pd.to_datetime(df["Device Time"], errors='coerce')
 
-    # Convertir velocidad
+    # Convertir velocidad y eliminar la columna original
     if "GPS Speed (Meters/second)" in df.columns:
         df["GPS Speed (Kilometers/hour)"] = df["GPS Speed (Meters/second)"] * 3.6
+        df.drop(columns=["GPS Speed (Meters/second)"], inplace=True)
 
     return df
 
@@ -84,12 +85,15 @@ def update_output(contents, selected_metric, hover_columns):
             lat='Latitude',
             lon='Longitude',
             color=selected_metric,
-            zoom=10,
-            height=500,
+            zoom=12,
+            height=400,
             color_continuous_scale='Jet',
             hover_data=hover_columns
         )
-        fig_map.update_layout(map_style="open-street-map", margin={"r":0,"t":0,"l":0,"b":0})
+        fig_map.update_layout(
+            mapbox={"style": "open-street-map"},
+            margin={"r": 0, "t": 0, "l": 0, "b": 0}
+        )
         map_graph = dcc.Graph(figure=fig_map)
     else:
         map_graph = html.Div("⚠️ El archivo no contiene columnas 'Latitude' y 'Longitude'.")
@@ -133,4 +137,4 @@ def update_output(contents, selected_metric, hover_columns):
     ])
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=False)
