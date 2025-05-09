@@ -2,8 +2,7 @@ import base64
 import io
 import pandas as pd
 import plotly.express as px
-from dash import Dash, html, dcc, Input, Output, State, callback_context
-from dash import dash_table
+from dash import Dash, html, dcc, Input, Output, State, callback_context, dash_table
 import dash_loading_spinners as dls
 import numpy as np
 
@@ -22,7 +21,7 @@ def parse_contents(contents):
         csv_string = decoded.decode('utf-8')
         csv_string_no_dup_header = remove_duplicate_header(csv_string)
         df = pd.read_csv(io.StringIO(csv_string_no_dup_header), skipinitialspace=True, na_values=["-"])
-        
+
         if "Device Time" in df.columns:
             try:
                 df["Time"] = pd.to_datetime(df["Device Time"], format='%d-%b-%Y %H:%M:%S.%f')
@@ -38,14 +37,14 @@ def parse_contents(contents):
             except ValueError as e:
                 print(f"Error converting 'GPS Time': {e}")
                 return None, "Error parsing 'GPS Time'. Check the format."
-                
+
     except Exception as e:
         print(e)
         return None, 'There was an error processing the file.'
-    
+
     if "GPS Speed (Meters/second)" in df.columns:
         df["GPS Speed (km/h)"] = df["GPS Speed (Meters/second)"] * 3.6
-    
+
     return df, ''
 
 app = Dash(__name__, external_stylesheets=[FA], title="Torque Logs Visualizer")
@@ -111,6 +110,8 @@ def update_output(list_of_contents, selected_value):
         time_column = "Time" if "Time" in df.columns else None
 
         # --- MAPA ---
+        map_fig = html.Div("⚠️ No se pudo generar el mapa.", style={'color': 'orange'})  # fallback
+
         if 'Latitude' in df.columns and 'Longitude' in df.columns and selected_value:
             if any(df[selected_value] < 0) and any(df[selected_value] > 0):
                 color_scale = px.colors.sequential.RdBu
@@ -123,56 +124,52 @@ def update_output(list_of_contents, selected_value):
                 df,
                 lat='Latitude',
                 lon='Longitude',
-            color=selected_value,
-            zoom=10,
-            height=500,
-            color_continuous_scale=color_scale,
-            color_continuous_midpoint=midpoint,
-            hover_data=df.columns
+                color=selected_value,
+                zoom=10,
+                height=500,
+                color_continuous_scale=color_scale,
+                color_continuous_midpoint=midpoint,
+                hover_data=df.columns
             )
             fig_map.update_layout(map_style="open-street-map", margin={"r": 0, "t": 0, "l": 0, "b": 0})
-
-        else:
-            map_fig = html.Div("⚠️ No se puede mostrar el mapa. Verificá que existan columnas 'Latitude', 'Longitude' y que se haya seleccionado una métrica.",
-                               style={'color': 'orange'})
+            map_fig = dcc.Graph(id='map-plot', figure=fig_map)
 
         # --- GRAFICO TEMPORAL ---
+        fig_time_series = None
         if time_column and selected_value:
             df_cleaned = df.dropna(subset=[selected_value])
             fig_time_series = px.line(df_cleaned, x=time_column, y=selected_value, title=f'{selected_value} over Time')
             fig_time_series.update_traces(mode='lines')
             fig_time_series.update_layout(hovermode='closest')
-        else:
-            fig_time_series = None
 
         # --- ESTADISTICAS ---
+        stats_table = html.Div("No se pudo calcular estadísticas.", style={'color': 'orange'})
         if selected_value:
             col_data = df[selected_value].dropna()
-            stats = {
-                'Statistic': ['Average', 'Maximum', 'Minimum', 'Start', 'End',
-                              '25th Percentile', 'Median', '75th Percentile', '90th Percentile'],
-                'Value': [
-                    col_data.mean(), col_data.max(), col_data.min(),
-                    col_data.iloc[0], col_data.iloc[-1],
-                    np.percentile(col_data, 25),
-                    np.percentile(col_data, 50),
-                    np.percentile(col_data, 75),
-                    np.percentile(col_data, 90)
-                ]
-            }
-            stats_df = pd.DataFrame(stats)
-            stats_table = dash_table.DataTable(
-                data=stats_df.to_dict('records'),
-                columns=[{'id': c, 'name': c} for c in stats_df.columns],
-                style_cell={'textAlign': 'left'},
-                style_header={'backgroundColor': 'white', 'fontWeight': 'bold'},
-                style_data_conditional=[
-                    {'if': {'row_index': 'odd'}, 'backgroundColor': 'rgb(248, 248, 248)'}
-                ],
-                style_table={'height': '350px', 'overflowY': 'auto'},
-            )
-        else:
-            stats_table = html.Div("No se pudo calcular estadísticas.", style={'color': 'orange'})
+            if not col_data.empty:
+                stats = {
+                    'Statistic': ['Average', 'Maximum', 'Minimum', 'Start', 'End',
+                                  '25th Percentile', 'Median', '75th Percentile', '90th Percentile'],
+                    'Value': [
+                        col_data.mean(), col_data.max(), col_data.min(),
+                        col_data.iloc[0], col_data.iloc[-1],
+                        np.percentile(col_data, 25),
+                        np.percentile(col_data, 50),
+                        np.percentile(col_data, 75),
+                        np.percentile(col_data, 90)
+                    ]
+                }
+                stats_df = pd.DataFrame(stats)
+                stats_table = dash_table.DataTable(
+                    data=stats_df.to_dict('records'),
+                    columns=[{'id': c, 'name': c} for c in stats_df.columns],
+                    style_cell={'textAlign': 'left'},
+                    style_header={'backgroundColor': 'white', 'fontWeight': 'bold'},
+                    style_data_conditional=[
+                        {'if': {'row_index': 'odd'}, 'backgroundColor': 'rgb(248, 248, 248)'}
+                    ],
+                    style_table={'height': '350px', 'overflowY': 'auto'},
+                )
 
         return html.Div([
             map_fig,
