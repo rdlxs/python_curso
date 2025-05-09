@@ -26,49 +26,7 @@ app.layout = html.Div([
 
         html.Hr(),
         html.Label("Seleccionar uso de variables"),
-        dash_table.DataTable(
-            id='variable-usage-table',
-            columns=[
-                {"name": "Variable", "id": "Variable", "presentation": "markdown"},
-                {"name": "Uso", "id": "Uso", "presentation": "dropdown"}
-            ],
-            editable=True,
-            row_deletable=False,
-            style_table={
-                'overflowY': 'auto',
-                'maxHeight': '250px',
-                'minWidth': '100%'
-            },
-            style_cell={
-                'textAlign': 'left',
-                'padding': '3px',
-                'fontSize': '13px',
-                'minWidth': '60px',
-                'maxWidth': '180px',
-                'overflow': 'hidden',
-                'textOverflow': 'ellipsis',
-                'whiteSpace': 'nowrap'
-            },
-            style_cell_conditional=[
-                {
-                    'if': {'column_id': 'Uso'},
-                    'width': '100px',
-                    'minWidth': '80px',
-                    'maxWidth': '120px',
-                    'textAlign': 'center'
-                }
-            ],
-            style_header={'fontWeight': 'bold'},
-            dropdown={
-                'Uso': {
-                    'options': [
-                        {'label': 'Métrica', 'value': 'metrica'},
-                        {'label': 'Hover', 'value': 'hover'},
-                        {'label': 'Ignorar', 'value': 'ignorar'}
-                    ]
-                }
-            }
-        )
+        html.Div(id='variable-usage-checklist-container')
     ], style={
         'width': '350px',
         'padding': '20px',
@@ -99,39 +57,47 @@ def parse_contents(contents):
     return df
 
 @app.callback(
-    [Output('variable-usage-table', 'data'),
-     Output('variable-usage-table', 'dropdown')],
+    Output('variable-usage-checklist-container', 'children'),
     Input('upload-data', 'contents')
 )
-def populate_variable_table(contents):
+def render_variable_checklists(contents):
     if not contents:
-        return [], no_update
+        return html.Div("📤 Subí un archivo para comenzar.")
 
     df = parse_contents(contents)
     exclude = [
         'Latitude', 'Longitude', 'Horizontal Dilution of Precision', 'Bearing',
         'G(x)', 'G(y)', 'G(z)', 'G(calibrated)'
     ]
-    variables = [col for col in df.columns if col not in exclude and df[col].dtype in ['float64', 'int64']]
-    data = [{'Variable': var, 'Uso': 'ignorar'} for var in variables]
-    return data, no_update
+    variables = [col for col in df.columns if col not in exclude and pd.api.types.is_numeric_dtype(df[col])]
+
+    return html.Div([
+        html.Label("Seleccionar métrica (una sola):"),
+        dcc.RadioItems(
+            id='metric-radio',
+            options=[{'label': var, 'value': var} for var in variables],
+            labelStyle={'display': 'block', 'margin': '2px 0'}
+        ),
+        html.Br(),
+        html.Label("Columnas para hover (pueden ser varias):"),
+        dcc.Checklist(
+            id='hover-checklist',
+            options=[{'label': var, 'value': var} for var in variables],
+            labelStyle={'display': 'block', 'margin': '2px 0'}
+        )
+    ])
 
 @app.callback(
     Output('output-visuals', 'children'),
     [Input('upload-data', 'contents'),
-     Input('variable-usage-table', 'data')]
+     Input('metric-radio', 'value'),
+     Input('hover-checklist', 'value')]
 )
-def update_visuals(contents, usage_data):
-    if not contents or not usage_data:
-        return html.Div("📤 Subí un archivo y seleccioná al menos una variable."),
+def update_visuals(contents, metrica, hover_columns):
+    if not contents or not metrica:
+        return html.Div("📤 Subí un archivo y seleccioná una métrica."),
 
     df = parse_contents(contents)
-
-    metrica = next((item['Variable'] for item in usage_data if item['Uso'] == 'metrica'), None)
-    hover_columns = [item['Variable'] for item in usage_data if item['Uso'] == 'hover']
-
-    if not metrica:
-        return html.Div("⚠️ No seleccionaste ninguna variable como métrica."),
 
     if 'Latitude' in df.columns and 'Longitude' in df.columns:
         fig_map = px.scatter_map(
@@ -142,7 +108,7 @@ def update_visuals(contents, usage_data):
             zoom=12,
             height=500,
             color_continuous_scale='Jet',
-            hover_data=[col for col in hover_columns if col in df.columns]
+            hover_data=[col for col in (hover_columns or []) if col in df.columns]
         )
         fig_map.update_layout(mapbox={"style": "carto-positron"}, margin={"r": 0, "t": 0, "l": 0, "b": 0})
 
@@ -162,7 +128,7 @@ def update_visuals(contents, usage_data):
     unidad = match.group(1) if match else ''
 
     stats_data = pd.DataFrame({
-        'Statistic': ['Prom', 'Max', 'Min', 'Start', 'End', '25%', '50%', '75%', '90%'],
+        'Statistic': ['Mean', 'Max', 'Min', 'Start', 'End', '25%', '50%', '75%', '90%'],
         'Value': [
             col_data.mean(), col_data.max(), col_data.min(),
             col_data.iloc[0], col_data.iloc[-1],
