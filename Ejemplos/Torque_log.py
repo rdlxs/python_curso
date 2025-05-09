@@ -130,8 +130,10 @@ def update_output(contents, selected_metric, hover_columns):
     return metric_options, hover_options, selected_metric, hover_columns, html.Div([
         html.H4("📍 Mapa del recorrido"),
         map_graph,
+        html.Div([
         html.H4("📈 Métrica temporal"),
-        time_graph,
+        time_graph
+    ], style={'marginTop': '40px'}),
         html.H4("📊 Estadísticas"),
         stats_table
     ])
