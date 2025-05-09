@@ -63,7 +63,10 @@ def update_output(contents, selected_metric, hover_columns):
     df = parse_contents(contents)
 
     metric_options = [{'label': col, 'value': col} for col in df.columns if df[col].dtype in ['float64', 'int64']]
-    hover_options = [{'label': col, 'value': col} for col in df.columns]
+
+    # Excluir lat/lon del hover
+    hover_exclude = ['Latitude', 'Longitude']
+    hover_options = [{'label': col, 'value': col} for col in df.columns if col not in hover_exclude]
 
     if selected_metric is None and metric_options:
         selected_metric = metric_options[0]['value']
@@ -88,7 +91,7 @@ def update_output(contents, selected_metric, hover_columns):
             height=500,
             color_continuous_scale=color_scale,
             color_continuous_midpoint=midpoint,
-            hover_data=hover_columns
+            hover_data=[col for col in hover_columns if col in df.columns and col not in hover_exclude]
         )
 
         fig_map.update_layout(
@@ -99,11 +102,11 @@ def update_output(contents, selected_metric, hover_columns):
         map_graph = dcc.Graph(
             figure=fig_map,
             config={
-                'displayModeBar': 'hover',  # Solo visible al pasar el mouse
+                'displayModeBar': 'hover',
                 'displaylogo': False,
                 'modeBarButtonsToAdd': ['zoom2d', 'pan2d', 'resetViewMapbox'],
                 'modeBarStyle': {
-                    'top': '100px',
+                    'top': '40px',
                     'right': '20px'
                 }
             }
@@ -124,6 +127,21 @@ def update_output(contents, selected_metric, hover_columns):
     # --- ESTADISTICAS ---
     if selected_metric:
         col_data = df[selected_metric].dropna()
+
+        # Agregar unidades por métrica
+        unidades = {
+            'GPS Speed (Kilometers/hour)': 'km/h',
+            'Engine RPM(rpm)': 'rpm',
+            'Ambient air temp(°C)': '°C',
+            'Engine Coolant Temperature(°C)': '°C',
+            'Fuel flow rate/hour(l/hr)': 'l/hr',
+            'Mass Air Flow Rate(g/s)': 'g/s',
+            'Throttle Position(Manifold)(%)': '%',
+            'Timing Advance(°)': '°',
+            'Voltage (Control Module)(V)': 'V'
+        }
+        unidad = unidades.get(selected_metric, '')
+
         stats_data = pd.DataFrame({
             'Statistic': ['Mean', 'Max', 'Min', 'Start', 'End', '25%', '50%', '75%', '90%'],
             'Value': [
@@ -133,7 +151,8 @@ def update_output(contents, selected_metric, hover_columns):
                 np.percentile(col_data, 50),
                 np.percentile(col_data, 75),
                 np.percentile(col_data, 90)
-            ]
+            ],
+            'Unit': [unidad] * 9
         })
 
         stats_table = dash_table.DataTable(
