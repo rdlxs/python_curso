@@ -126,6 +126,8 @@ def update_visuals(contents, metrica, hover_columns):
     col_data = df[metrica].dropna()
     match = re.search(r'\(([^()]*)\)\s*$', metrica)
     unidad = match.group(1) if match else ''
+    if unidad == 'Kilometers/hour':
+        unidad = 'km/h'
 
     stats_data = pd.DataFrame({
         'Statistic': ['Mean', 'Max', 'Min', 'Start', 'End', '25%', '50%', '75%', '90%'],
