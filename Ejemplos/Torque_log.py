@@ -131,7 +131,9 @@ def update_output(list_of_contents, selected_value):
         # Gráfico de serie temporal
         time_column = "Time" if "Time" in df.columns else None
         if time_column and selected_value:
-            fig_time_series = px.line(df, x=time_column, y=selected_value, title=f'{selected_value} over Time')
+            # Eliminar valores nulos antes de graficar
+            df_cleaned = df.dropna(subset=[selected_value])
+            fig_time_series = px.line(df_cleaned, x=time_column, y=selected_value, title=f'{selected_value} over Time')
             fig_time_series.update_traces(mode='lines')
             fig_time_series.update_layout(hovermode='closest')
         else:
@@ -163,11 +165,12 @@ def update_output(list_of_contents, selected_value):
                 style_header={'backgroundColor': 'white', 'fontWeight': 'bold'},
                 style_data_conditional=[
                     {'if': {'row_index': 'odd'}, 'backgroundColor': 'rgb(248, 248, 248)'}
-                ]
+                ],
+                style_table={'height': '350px', 'overflowY': 'auto'},
             )
         ]), dropdown_options
 
-    return "No file uploaded.", []
+    return html.Div('Please upload a CSV file.'), []
 
 if __name__ == '__main__':
-    app.run(debug=False)
+    app.run(debug=True)
