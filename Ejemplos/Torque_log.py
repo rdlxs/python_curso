@@ -3,7 +3,7 @@ import io
 import pandas as pd
 import numpy as np
 import plotly.express as px
-from dash import Dash, html, dcc, Input, Output, dash_table, State, no_update
+from dash import Dash, html, dcc, Input, Output, dash_table, State, no_update, ctx, callback_context
 import re
 
 app = Dash(__name__)
@@ -23,6 +23,9 @@ app.layout = html.Div([
             },
             multiple=False
         ),
+
+        html.Button("⬇️ Descargar Excel", id="download-button", style={'marginTop': '10px'}),
+        dcc.Download(id="download-dataframe-xlsx"),
 
         html.Hr(),
         html.Label("Seleccionar uso de variables"),
@@ -56,6 +59,8 @@ def parse_contents(contents):
 
     return df
 
+stored_df = {}
+
 @app.callback(
     Output('variable-usage-checklist-container', 'children'),
     Input('upload-data', 'contents')
@@ -65,6 +70,8 @@ def render_variable_checklists(contents):
         return html.Div("📤 Subí un archivo para comenzar.")
 
     df = parse_contents(contents)
+    stored_df['data'] = df
+
     exclude = [
         'Latitude', 'Longitude', 'Horizontal Dilution of Precision', 'Bearing',
         'G(x)', 'G(y)', 'G(z)', 'G(calibrated)'
@@ -84,6 +91,13 @@ def render_variable_checklists(contents):
             id='hover-checklist',
             options=[{'label': var, 'value': var} for var in variables],
             labelStyle={'display': 'block', 'margin': '2px 0'}
+        ),
+        html.Br(),
+        html.Label("Seleccionar variables para graficar contra el tiempo:"),
+        dcc.Checklist(
+            id='multi-timeseries-vars',
+            options=[{'label': var, 'value': var} for var in variables],
+            labelStyle={'display': 'block', 'margin': '2px 0'}
         )
     ])
 
@@ -91,13 +105,15 @@ def render_variable_checklists(contents):
     Output('output-visuals', 'children'),
     [Input('upload-data', 'contents'),
      Input('metric-radio', 'value'),
-     Input('hover-checklist', 'value')]
+     Input('hover-checklist', 'value'),
+     Input('multi-timeseries-vars', 'value')]
 )
-def update_visuals(contents, metrica, hover_columns):
+def update_visuals(contents, metrica, hover_columns, timeseries_vars):
     if not contents or not metrica:
         return html.Div("📤 Subí un archivo y seleccioná una métrica."),
 
     df = parse_contents(contents)
+    stored_df['data'] = df
 
     if 'Latitude' in df.columns and 'Longitude' in df.columns:
         fig_map = px.scatter_map(
@@ -121,7 +137,25 @@ def update_visuals(contents, metrica, hover_columns):
     else:
         map_graph = html.Div("⚠️ No hay coordenadas para mostrar el mapa.")
 
+    # Single metric time plot
     fig_time = px.line(df.dropna(subset=[metrica]), x='Time', y=metrica, title=f"{metrica} en el tiempo")
+
+    # Multi-variable time series plot
+    multi_graph = None
+    if timeseries_vars:
+        df_melt = df[['Time'] + timeseries_vars].melt(id_vars='Time', var_name='Variable', value_name='Valor')
+        fig_multi = px.line(df_melt.dropna(), x='Time', y='Valor', color='Variable', title="Variables seleccionadas en el tiempo")
+        multi_graph = dcc.Graph(figure=fig_multi, config={
+            'toImageButtonOptions': {
+                'format': 'png',
+                'filename': 'comparativa_variables',
+                'height': 600,
+                'width': 1000,
+                'scale': 2
+            },
+            'modeBarButtonsToAdd': ['toImage'],
+            'displaylogo': False
+        })
 
     col_data = df[metrica].dropna()
     match = re.search(r'\(([^()]*)\)\s*$', metrica)
@@ -130,7 +164,7 @@ def update_visuals(contents, metrica, hover_columns):
         unidad = 'km/h'
 
     stats_data = pd.DataFrame({
-        'Statistic': ['Prom', 'Max', 'Min', 'Start', 'End', '25%', '50%', '75%', '90%'],
+        'Statistic': ['Mean', 'Max', 'Min', 'Start', 'End', '25%', '50%', '75%', '90%'],
         'Value': [
             col_data.mean(), col_data.max(), col_data.min(),
             col_data.iloc[0], col_data.iloc[-1],
@@ -173,12 +207,26 @@ def update_visuals(contents, metrica, hover_columns):
         html.Div([
             html.H4("📈 Métrica temporal"),
             dcc.Graph(figure=fig_time)
-        ], style={'marginTop': '80px'}),
+        ], style={'marginTop': '40px'}),
+        html.Div([
+            html.H4("📉 Comparativa de variables seleccionadas"),
+            multi_graph if multi_graph else html.Div("Seleccioná variables para comparar.")
+        ], style={'marginTop': '40px'}),
         html.Div([
             html.H4("📊 Estadísticas"),
             stats_table
         ], style={'marginTop': '40px'})
     ], style={'padding': '20px'})
+
+@app.callback(
+    Output("download-dataframe-xlsx", "data"),
+    Input("download-button", "n_clicks"),
+    prevent_initial_call=True
+)
+def download_excel(n_clicks):
+    if 'data' in stored_df:
+        return dcc.send_data_frame(stored_df['data'].to_excel, "torque_log.xlsx", index=False)
+    return no_update
 
 if __name__ == '__main__':
     app.run(debug=False)
