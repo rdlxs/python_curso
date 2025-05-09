@@ -101,7 +101,7 @@ def parse_contents(contents):
 
     if "GPS Speed (Meters/second)" in df.columns:
         df["GPS Speed (Kilometers/hour)"] = df["GPS Speed (Meters/second)"] * 3.6
-        df.drop(columns=["GPS Speed (Meters/second)"], inplace=True)
+        df.drop(columns=["GPS Speed (Meters/second)"] , inplace=True)
 
     return df
 
@@ -131,7 +131,7 @@ def populate_variable_table(contents):
 )
 def update_visuals(contents, usage_data, dark_mode):
     if not contents or not usage_data:
-        return html.Div("\ud83d\udd3c Sub\u00ed un archivo y seleccion\u00e1 al menos una variable."),
+        return html.Div("📤 Subí un archivo y seleccioná al menos una variable."),
 
     df = parse_contents(contents)
 
@@ -146,7 +146,7 @@ def update_visuals(contents, usage_data, dark_mode):
     }
 
     if not metrica:
-        return html.Div("\u26a0\ufe0f No seleccionaste ninguna variable como m\u00e9trica."),
+        return html.Div("⚠️ No seleccionaste ninguna variable como métrica."),
 
     if 'Latitude' in df.columns and 'Longitude' in df.columns:
         fig_map = px.scatter_map(
@@ -169,16 +169,53 @@ def update_visuals(contents, usage_data, dark_mode):
             'modeBarStyle': {'top': '40px', 'right': '20px'}
         })
     else:
-        map_graph = html.Div("\u26a0\ufe0f No hay coordenadas para mostrar el mapa.")
+        map_graph = html.Div("⚠️ No hay coordenadas para mostrar el mapa.")
 
     fig_time = px.line(df.dropna(subset=[metrica]), x='Time', y=metrica, title=f"{metrica} en el tiempo")
 
+    col_data = df[metrica].dropna()
+    stats_data = pd.DataFrame({
+        'Statistic': ['Mean', 'Max', 'Min', 'Start', 'End', '25%', '50%', '75%', '90%'],
+        'Value': [
+            col_data.mean(), col_data.max(), col_data.min(),
+            col_data.iloc[0], col_data.iloc[-1],
+            np.percentile(col_data, 25),
+            np.percentile(col_data, 50),
+            np.percentile(col_data, 75),
+            np.percentile(col_data, 90)
+        ]
+    })
+
+    stats_table = dash_table.DataTable(
+        data=stats_data.to_dict('records'),
+        columns=[
+            {"name": "Statistic", "id": "Statistic"},
+            {"name": "Value", "id": "Value", "type": "numeric", "format": {"specifier": ".2f"}}
+        ],
+        style_table={'maxHeight': '300px', 'overflowY': 'auto', 'width': '400px'},
+        style_cell={
+            'padding': '6px',
+            'fontSize': '14px',
+            'whiteSpace': 'normal',
+            'textAlign': 'left'
+        },
+        style_header={
+            'fontWeight': 'bold',
+            'backgroundColor': '#333' if is_dark else 'white',
+            'color': 'white' if is_dark else 'black'
+        }
+    )
+
     return html.Div([
-        html.H4("\ud83d\udccd Mapa del recorrido"),
+        html.H4("📍 Mapa del recorrido"),
         map_graph,
         html.Div([
-            html.H4("\ud83d\udcc8 M\u00e9trica temporal"),
+            html.H4("📈 Métrica temporal"),
             dcc.Graph(figure=fig_time)
+        ], style={'marginTop': '40px'}),
+        html.Div([
+            html.H4("📊 Estadísticas"),
+            stats_table
         ], style={'marginTop': '40px'})
     ], style=dark_style)
 
