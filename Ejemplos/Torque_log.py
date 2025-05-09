@@ -133,7 +133,7 @@ def update_visuals(contents, metrica, hover_columns, timeseries_vars):
             color_continuous_scale='Jet',
             hover_data=[col for col in (hover_columns or []) if col in df.columns]
         )
-        fig_map.update_layout(mapbox={"style": "carto-positron"}, margin={"r": 0, "t": 0, "l": 0, "b": 0})
+        fig_map.update_layout(font=dict(size=12, family="Inter"), mapbox={"style": "carto-positron"}, margin={"r": 0, "t": 0, "l": 0, "b": 0})
 
         map_graph = dcc.Graph(figure=fig_map, config={
             'displayModeBar': 'hover',
@@ -146,12 +146,14 @@ def update_visuals(contents, metrica, hover_columns, timeseries_vars):
 
     # Single metric time plot
     fig_time = px.line(df.dropna(subset=[metrica]), x='Time', y=metrica, title=f"{metrica} en el tiempo")
+    fig_time.update_layout(font=dict(size=12, family="Inter")), x='Time', y=metrica, title=f"{metrica} en el tiempo")
 
     # Multi-variable time series plot
     multi_graph = None
     if timeseries_vars:
         df_melt = df[['Time'] + timeseries_vars].melt(id_vars='Time', var_name='Variable', value_name='Valor')
         fig_multi = px.line(df_melt.dropna(), x='Time', y='Valor', color='Variable', title="Variables seleccionadas en el tiempo")
+        fig_multi.update_layout(font=dict(size=12, family="Inter")), x='Time', y='Valor', color='Variable', title="Variables seleccionadas en el tiempo")
         multi_graph = dcc.Graph(figure=fig_multi, config={
             'toImageButtonOptions': {
                 'format': 'png',
@@ -193,7 +195,7 @@ def update_visuals(contents, metrica, hover_columns, timeseries_vars):
         style_table={'maxHeight': '300px', 'overflowY': 'auto', 'width': '400px'},
         style_cell={
             'padding': '6px',
-            'fontSize': '14px',
+            'fontSize': '12px',
             'whiteSpace': 'normal'
         },
         style_cell_conditional=[
@@ -212,15 +214,15 @@ def update_visuals(contents, metrica, hover_columns, timeseries_vars):
         html.H4("📍 Mapa del recorrido"),
         map_graph,
         html.Div([
-            html.H4("📈 Métrica temporal"),
-            dcc.Graph(figure=fig_time)
-        ], style={'marginTop': '40px'}),
+        html.H4("📈 Métrica temporal"),
+        dcc.Graph(figure=fig_time)
+    ], style={'marginTop': '80px'}),
         html.Div([
             html.H4("📉 Comparativa de variables seleccionadas"),
             multi_graph if multi_graph else html.Div("Seleccioná variables para comparar.")
-        ], style={'marginTop': '40px'}),
+        ], style={'marginTop': '80px'}),
         html.Div([
-            html.H4("📊 Estadísticas"),
+        html.H4("📊 Estadísticas"),
             stats_table
         ], style={'marginTop': '40px'})
     ], style={'padding': '20px'})
