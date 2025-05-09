@@ -3,7 +3,7 @@ import io
 import pandas as pd
 import plotly.express as px
 from dash import Dash, html, dcc, Input, Output, State, callback_context
-import dash_table
+from dash import dash_table
 import dash_loading_spinners as dls
 import numpy as np
 
@@ -119,19 +119,19 @@ def update_output(list_of_contents, selected_value):
                 color_scale = px.colors.sequential.Jet
                 midpoint = None
 
-            fig_map = px.scatter_mapbox(
+            fig_map = px.scatter_map(
                 df,
                 lat='Latitude',
                 lon='Longitude',
-                color=selected_value,
-                zoom=10,
-                height=500,
-                color_continuous_scale=color_scale,
-                color_continuous_midpoint=midpoint,
-                hover_data=df.columns
+            color=selected_value,
+            zoom=10,
+            height=500,
+            color_continuous_scale=color_scale,
+            color_continuous_midpoint=midpoint,
+            hover_data=df.columns
             )
-            fig_map.update_layout(mapbox_style="open-street-map", margin={"r": 0, "t": 0, "l": 0, "b": 0})
-            map_fig = dcc.Graph(id='map-plot', figure=fig_map)
+            fig_map.update_layout(map_style="open-street-map", margin={"r": 0, "t": 0, "l": 0, "b": 0})
+
         else:
             map_fig = html.Div("⚠️ No se puede mostrar el mapa. Verificá que existan columnas 'Latitude', 'Longitude' y que se haya seleccionado una métrica.",
                                style={'color': 'orange'})
