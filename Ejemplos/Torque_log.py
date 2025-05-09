@@ -2,11 +2,10 @@ import base64
 import io
 import pandas as pd
 import plotly.express as px
-from dash import Dash, html, dcc, Input, Output, State, callback_context, dash_table
+from dash import Dash, html, dcc, Input, Output, State, callback_context
+import dash_table
 import dash_loading_spinners as dls
 import numpy as np
-import tempfile
-from fpdf import FPDF
 
 FA = "https://use.fontawesome.com/releases/v5.8.1/css/all.css"
 
@@ -20,10 +19,11 @@ def parse_contents(contents):
     content_type, content_string = contents.split(',')
     decoded = base64.b64decode(content_string)
     try:
+        # Intentar leer como CSV sin validar content_type
         csv_string = decoded.decode('utf-8')
         csv_string_no_dup_header = remove_duplicate_header(csv_string)
         df = pd.read_csv(io.StringIO(csv_string_no_dup_header), skipinitialspace=True, na_values=["-"])
-
+        
         if "Device Time" in df.columns:
             try:
                 df["Time"] = pd.to_datetime(df["Device Time"], format='%d-%b-%Y %H:%M:%S.%f')
@@ -39,16 +39,17 @@ def parse_contents(contents):
             except ValueError as e:
                 print(f"Error converting 'GPS Time': {e}")
                 return None, "Error parsing 'GPS Time'. Check the format."
-
+                
     except Exception as e:
         print(e)
         return None, 'There was an error processing the file.'
     
-     # Conversión de velocidad a km/h
+    # Conversión de velocidad a km/h
     if "GPS Speed (Meters/second)" in df.columns:
         df["GPS Speed (km/h)"] = df["GPS Speed (Meters/second)"] * 3.6
-
+    
     return df, ''
+
 
 app = Dash(__name__, external_stylesheets=[FA], title="Torque Logs Visualizer")
 
@@ -68,9 +69,9 @@ app.layout = html.Div([
         placeholder='Select a value...',
         style={'margin': '10px 0'}
     ),
-    html.Button("Descargar PDF", id="btn-pdf", n_clicks=0, style={"margin": "10px"}),
-    dcc.Download(id="download-pdf"),
-    dls.Ring(html.Div(id='output-data-upload', style={'margin': '20px 0'})),
+    dls.Ring(
+        html.Div(id='output-data-upload', style={'margin': '20px 0'}),
+    ),
     html.A(
         className="github-fab",
         href="https://github.com/rdlxs/python_curso/tree/main/Ejemplos",
@@ -110,38 +111,33 @@ def update_output(list_of_contents, selected_value):
         print(f"Valid columns for dropdown: {valid_columns}")  # Verificar columnas válidas
         dropdown_options = [{'label': col, 'value': col} for col in valid_columns]
 
-        if 'upload-data' in triggered_by and valid_columns:
-            if "GPS Speed (km/h)" in valid_columns:
-                selected_value = "GPS Speed (km/h)"
-            else:
-                selected_value = valid_columns[0]
-        if selected_value:
-            if any(df[selected_value] < 0) and any(df[selected_value] > 0):
-                color_scale = px.colors.sequential.RdBu
-                color_continuous_midpoint = 0
-            else:
-                color_scale = px.colors.sequential.Jet
-                color_continuous_midpoint = None
+        # Si no se seleccionó ninguna opción, se selecciona la primera columna válida
+        if selected_value is None and valid_columns:
+            selected_value = valid_columns[0]
 
-            # Validar columnas GPS
-            if 'Latitude' in df.columns and 'Longitude' in df.columns:
-                fig_map = px.scatter_mapbox(df, lat='Latitude', lon='Longitude', color=selected_value,
-                                            zoom=10, height=500, color_continuous_scale=color_scale,
-                                            color_continuous_midpoint=color_continuous_midpoint,
-                                            hover_data=df.columns)
-                fig_map.update_layout(mapbox_style="open-street-map", margin={"r": 0, "t": 0, "l": 0, "b": 0})
-                map_fig = dcc.Graph(id='map-plot', figure=fig_map)
-            else:
-                map_fig = html.Div("⚠️ El archivo no contiene columnas 'Latitude' y 'Longitude'. No se puede mostrar el mapa.",
-                                   style={'color': 'orange', 'marginBottom': '10px'})
+        print(f"Selected value for plotting: {selected_value}")  # Verificar la columna seleccionada
 
-            # Gráfico de serie temporal
-            if time_column:
-                fig_time_series = px.line(df, x=time_column, y=selected_value, title=f'{selected_value} over Time')
-                fig_time_series.update_traces(mode='lines')
-                fig_time_series.update_layout(hovermode='closest')
-            else:
-                fig_time_series = None
+        # Verifica si existe Latitude y Longitude
+        if 'Latitude' in df.columns and 'Longitude' in df.columns:
+            # Mapa interactivo
+            fig_map = px.scatter_map(df, lat='Latitude', lon='Longitude', color=selected_value,
+                                     zoom=10, height=500, color_continuous_scale='Jet', hover_data=df.columns)
+            fig_map.update_layout(map_style="open-street-map", margin={"r": 0, "t": 0, "l": 0, "b": 0})
+            map_fig = dcc.Graph(id='map-plot', figure=fig_map)
+        else:
+            map_fig = html.Div("⚠️ El archivo no contiene columnas 'Latitude' y 'Longitude'. No se puede mostrar el mapa.",
+                               style={'color': 'orange', 'marginBottom': '10px'})
+
+        # Gráfico de serie temporal
+        time_column = "Time" if "Time" in df.columns else None
+        if time_column and selected_value:
+            # Eliminar valores nulos antes de graficar
+            df_cleaned = df.dropna(subset=[selected_value])
+            fig_time_series = px.line(df_cleaned, x=time_column, y=selected_value, title=f'{selected_value} over Time')
+            fig_time_series.update_traces(mode='lines')
+            fig_time_series.update_layout(hovermode='closest')
+        else:
+            fig_time_series = None
 
         # Estadísticas
         statistics = {
@@ -176,47 +172,5 @@ def update_output(list_of_contents, selected_value):
 
     return html.Div('Please upload a CSV file.'), []
 
-@app.callback(
-    Output("download-pdf", "data"),
-    Input("btn-pdf", "n_clicks"),
-    State("upload-data", "contents"),
-    State("value-dropdown", "value"),
-    prevent_initial_call=True
-)
-def generate_pdf(n_clicks, contents, selected_value):
-    if not contents or not selected_value:
-        return None
-
-    df, _ = parse_contents(contents)
-    if df is None or selected_value not in df.columns:
-        return None
-
-    fig = px.line(df, x="Time", y=selected_value, title=f"{selected_value} over Time")
-    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp_img:
-        fig.write_image(tmp_img.name)
-        chart_path = tmp_img.name
-
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", size=12)
-    pdf.cell(200, 10, txt="Reporte Torque Logs", ln=True, align="C")
-    pdf.ln(10)
-    pdf.cell(200, 10, txt=f"Variable: {selected_value}", ln=True)
-    pdf.image(chart_path, x=10, y=40, w=180)
-    pdf.ln(105)
-
-    stats = {
-        'Average': df[selected_value].mean(),
-        'Maximum': df[selected_value].max(),
-        'Minimum': df[selected_value].min(),
-        'Median': df[selected_value].median()
-    }
-    for stat, value in stats.items():
-        pdf.cell(200, 10, txt=f"{stat}: {value:.2f}", ln=True)
-
-    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp_pdf:
-        pdf.output(tmp_pdf.name)
-        return dcc.send_file(tmp_pdf.name)
-
 if __name__ == '__main__':
-    app.run(debug=False)
+    app.run(debug=True)
