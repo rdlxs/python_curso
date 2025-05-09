@@ -2,7 +2,8 @@ import base64
 import io
 import pandas as pd
 import plotly.express as px
-from dash import Dash, html, dcc, Input, Output, State, callback_context, dash_table
+from dash import Dash, html, dcc, Input, Output, State, callback_context
+import dash_table
 import dash_loading_spinners as dls
 import numpy as np
 
@@ -43,7 +44,7 @@ def parse_contents(contents):
         print(e)
         return None, 'There was an error processing the file.'
     
-     # Conversión de velocidad a km/h
+    # Conversión de velocidad a km/h
     if "GPS Speed (Meters/second)" in df.columns:
         df["GPS Speed (km/h)"] = df["GPS Speed (Meters/second)"] * 3.6
     
@@ -77,11 +78,10 @@ app.layout = html.Div([
         target="_blank",
         children=html.I(className="fab fa-github fa-2x"),
         style={
-            'position': 'fixed', 'bottom': '20px', 'right': '20px',
-            'display': 'flex', 'alignItems': 'center', 'justifyContent': 'center',
-            'color': 'white', 'backgroundColor': '#000', 'borderRadius': '50%',
-            'width': '50px', 'height': '50px', 'textAlign': 'center',
-            'textDecoration': 'none', 'boxShadow': '2px 2px 3px rgba(0,0,0,0.2)',
+            'position': 'fixed', 'bottom': '20px', 'right': '20px', 'display': 'flex',
+            'alignItems': 'center', 'justifyContent': 'center', 'color': 'white',
+            'backgroundColor': '#000', 'borderRadius': '50%', 'width': '50px', 'height': '50px',
+            'textAlign': 'center', 'textDecoration': 'none', 'boxShadow': '2px 2px 3px rgba(0,0,0,0.2)',
         }
     ),
 ])
@@ -94,6 +94,8 @@ app.layout = html.Div([
 )
 def update_output(list_of_contents, selected_value):
     print("Callback triggered")
+    
+    # Verificamos si el archivo fue cargado
     if list_of_contents:
         df, error_message = parse_contents(list_of_contents)
         if df is None:
@@ -105,9 +107,9 @@ def update_output(list_of_contents, selected_value):
         valid_columns = [col for col in df.columns if df[col].dtype in ['float64', 'int64']]
         dropdown_options = [{'label': col, 'value': col} for col in valid_columns]
 
-        # Si no hay ninguna opción válida, no se selecciona ninguna
-        if selected_value and selected_value not in valid_columns:
-            selected_value = valid_columns[0] if valid_columns else None
+        # Si no se seleccionó ninguna opción, se selecciona la primera columna válida
+        if selected_value is None and valid_columns:
+            selected_value = valid_columns[0]
 
         # Verifica si existe Latitude y Longitude
         if 'Latitude' in df.columns and 'Longitude' in df.columns:
