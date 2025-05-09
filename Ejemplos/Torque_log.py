@@ -5,11 +5,9 @@ import numpy as np
 import plotly.express as px
 from dash import Dash, html, dcc, Input, Output, dash_table, ctx
 
-# Inicializar app
 app = Dash(__name__)
 app.title = "Torque Log Visualizer"
 
-# Layout
 app.layout = html.Div([
     html.H2("Torque Log Visualizer"),
 
@@ -30,28 +28,24 @@ app.layout = html.Div([
     html.Div(id='output-visuals')
 ])
 
-# Función de parseo
 def parse_contents(contents):
     content_type, content_string = contents.split(',')
     decoded = base64.b64decode(content_string)
     csv_string = decoded.decode('utf-8')
     df = pd.read_csv(io.StringIO(csv_string), skipinitialspace=True, na_values=["-"])
 
-    # Convertir Device Time si existe
     if "Device Time" in df.columns:
         try:
             df["Time"] = pd.to_datetime(df["Device Time"], format='%d-%b-%Y %H:%M:%S.%f')
         except:
             df["Time"] = pd.to_datetime(df["Device Time"], errors='coerce')
 
-    # Convertir velocidad y eliminar la columna original
     if "GPS Speed (Meters/second)" in df.columns:
         df["GPS Speed (Kilometers/hour)"] = df["GPS Speed (Meters/second)"] * 3.6
         df.drop(columns=["GPS Speed (Meters/second)"], inplace=True)
 
     return df
 
-# Callback para procesar archivo y generar dropdowns
 @app.callback(
     [Output('metric-dropdown', 'options'),
      Output('hover-columns-dropdown', 'options'),
@@ -68,72 +62,94 @@ def update_output(contents, selected_metric, hover_columns):
 
     df = parse_contents(contents)
 
-    # Detectar columnas numéricas para el dropdown de métricas
     metric_options = [{'label': col, 'value': col} for col in df.columns if df[col].dtype in ['float64', 'int64']]
     hover_options = [{'label': col, 'value': col} for col in df.columns]
 
-    # Default
     if selected_metric is None and metric_options:
         selected_metric = metric_options[0]['value']
     if hover_columns is None:
         hover_columns = ['Time', selected_metric]
 
-    # Mapa
-    if 'Latitude' in df.columns and 'Longitude' in df.columns:
+    # --- MAPA DEL RECORRIDO ---
+    if 'Latitude' in df.columns and 'Longitude' in df.columns and selected_metric:
+        if any(df[selected_metric] < 0) and any(df[selected_metric] > 0):
+            color_scale = px.colors.sequential.RdBu
+            midpoint = 0
+        else:
+            color_scale = px.colors.sequential.Jet
+            midpoint = None
+
         fig_map = px.scatter_map(
             df,
             lat='Latitude',
             lon='Longitude',
             color=selected_metric,
             zoom=12,
-            height=400,
-            color_continuous_scale='Jet',
+            height=500,
+            color_continuous_scale=color_scale,
+            color_continuous_midpoint=midpoint,
             hover_data=hover_columns
         )
+
         fig_map.update_layout(
-            mapbox={"style": "open-street-map"},
+            mapbox={"style": "carto-positron"},
             margin={"r": 0, "t": 0, "l": 0, "b": 0}
         )
-        map_graph = dcc.Graph(figure=fig_map)
+
+        map_graph = dcc.Graph(
+            figure=fig_map,
+            config={
+                'displayModeBar': 'hover',  # Solo visible al pasar el mouse
+                'displaylogo': False,
+                'modeBarButtonsToAdd': ['zoom2d', 'pan2d', 'resetViewMapbox'],
+                'modeBarStyle': {
+                    'top': '40px',
+                    'right': '20px'
+                }
+            }
+        )
     else:
         map_graph = html.Div("⚠️ El archivo no contiene columnas 'Latitude' y 'Longitude'.")
 
-    # Gráfico temporal
+    # --- GRAFICO TEMPORAL ---
     if 'Time' in df.columns and selected_metric:
         fig_time = px.line(df.dropna(subset=[selected_metric]), x='Time', y=selected_metric, title=f"{selected_metric} en el tiempo")
-        time_graph = dcc.Graph(figure=fig_time)
+        time_graph = html.Div([
+            html.H4("📈 Métrica temporal"),
+            dcc.Graph(figure=fig_time)
+        ], style={'marginTop': '60px'})
     else:
         time_graph = html.Div("⚠️ No se puede graficar el tiempo.")
 
-    # Estadísticas
-    stats = df[selected_metric].dropna()
-    stats_data = pd.DataFrame({
-        'Statistic': ['Mean', 'Max', 'Min', 'Start', 'End', '25%', '50%', '75%', '90%'],
-        'Value': [
-            stats.mean(), stats.max(), stats.min(),
-            stats.iloc[0], stats.iloc[-1],
-            np.percentile(stats, 25),
-            np.percentile(stats, 50),
-            np.percentile(stats, 75),
-            np.percentile(stats, 90)
-        ]
-    })
+    # --- ESTADISTICAS ---
+    if selected_metric:
+        col_data = df[selected_metric].dropna()
+        stats_data = pd.DataFrame({
+            'Statistic': ['Mean', 'Max', 'Min', 'Start', 'End', '25%', '50%', '75%', '90%'],
+            'Value': [
+                col_data.mean(), col_data.max(), col_data.min(),
+                col_data.iloc[0], col_data.iloc[-1],
+                np.percentile(col_data, 25),
+                np.percentile(col_data, 50),
+                np.percentile(col_data, 75),
+                np.percentile(col_data, 90)
+            ]
+        })
 
-    stats_table = dash_table.DataTable(
-        data=stats_data.to_dict('records'),
-        columns=[{"name": i, "id": i} for i in stats_data.columns],
-        style_table={'maxHeight': '300px', 'overflowY': 'auto'},
-        style_cell={'textAlign': 'left'},
-        style_header={'fontWeight': 'bold'}
-    )
+        stats_table = dash_table.DataTable(
+            data=stats_data.to_dict('records'),
+            columns=[{"name": i, "id": i} for i in stats_data.columns],
+            style_table={'maxHeight': '300px', 'overflowY': 'auto'},
+            style_cell={'textAlign': 'left'},
+            style_header={'fontWeight': 'bold'}
+        )
+    else:
+        stats_table = html.Div("⚠️ No se pudo calcular estadísticas.")
 
     return metric_options, hover_options, selected_metric, hover_columns, html.Div([
         html.H4("📍 Mapa del recorrido"),
         map_graph,
-        html.Div([
-        html.H4("📈 Métrica temporal"),
-        time_graph
-    ], style={'marginTop': '75px'}),
+        time_graph,
         html.H4("📊 Estadísticas"),
         stats_table
     ])
