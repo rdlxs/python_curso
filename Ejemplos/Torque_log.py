@@ -101,15 +101,21 @@ def update_output(list_of_contents, selected_value):
         if df is None:
             return html.Div(error_message, style={'color': 'red'}), []
         
-        print("Dataframe loaded:", df.head())  # Imprime las primeras filas del DataFrame
+        # Imprimir las columnas del dataframe para verificar
+        print("Dataframe loaded:")
+        print(df.columns)  # Verifica si el DataFrame tiene las columnas correctas
+        print(df.head())  # Imprimir las primeras filas para ver el contenido
 
         # Si hay columnas válidas para el dropdown
         valid_columns = [col for col in df.columns if df[col].dtype in ['float64', 'int64']]
+        print(f"Valid columns for dropdown: {valid_columns}")  # Verificar columnas válidas
         dropdown_options = [{'label': col, 'value': col} for col in valid_columns]
 
         # Si no se seleccionó ninguna opción, se selecciona la primera columna válida
         if selected_value is None and valid_columns:
             selected_value = valid_columns[0]
+
+        print(f"Selected value for plotting: {selected_value}")  # Verificar la columna seleccionada
 
         # Verifica si existe Latitude y Longitude
         if 'Latitude' in df.columns and 'Longitude' in df.columns:
