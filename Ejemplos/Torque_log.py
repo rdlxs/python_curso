@@ -159,7 +159,13 @@ def update_output(contents, selected_metric, hover_columns):
             data=stats_data.to_dict('records'),
             columns=[{"name": i, "id": i} for i in stats_data.columns],
             style_table={'maxHeight': '300px', 'overflowY': 'auto'},
-            style_cell={'textAlign': 'left'},
+            style_cell={'padding': '6px', 'fontSize': '14px'},
+            style_cell_conditional=[
+                {'if': {'column_id': 'Statistic'}, 'textAlign': 'left'},
+        {'if': {'column_id': 'Value'}, 'textAlign': 'right', 'width': '100px'},
+        {'if': {'column_id': 'Unit'}, 'textAlign': 'left', 'width': '60px'}
+],
+
             style_header={'fontWeight': 'bold'}
         )
     else:
