@@ -7,9 +7,16 @@ from dash import Dash, html, dcc, Input, Output, dash_table, State, no_update, c
 import re
 
 app = Dash(__name__)
+
+# Agregar fuente Inter desde Google Fonts
+font_link = html.Link(
+    rel='stylesheet',
+    href='https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap'
+)
 app.title = "Torque Log Visualizer"
 
 app.layout = html.Div([
+    font_link,
     html.Div([
         html.H2("Torque Log Visualizer", style={'marginBottom': '20px'}),
 
@@ -38,7 +45,7 @@ app.layout = html.Div([
     }),
 
     html.Div(id='output-visuals', style={'flexGrow': 1, 'padding': '20px'})
-], style={'display': 'flex', 'minHeight': '100vh'})
+], style={'fontFamily': 'Inter, sans-serif', 'display': 'flex', 'minHeight': '100vh'})
 
 
 def parse_contents(contents):
@@ -207,7 +214,7 @@ def update_visuals(contents, metrica, hover_columns, timeseries_vars):
         html.Div([
             html.H4("📈 Métrica temporal"),
             dcc.Graph(figure=fig_time)
-        ], style={'marginTop': '80px'}),
+        ], style={'marginTop': '40px'}),
         html.Div([
             html.H4("📉 Comparativa de variables seleccionadas"),
             multi_graph if multi_graph else html.Div("Seleccioná variables para comparar.")
