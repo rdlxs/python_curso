@@ -3,30 +3,54 @@ import io
 import pandas as pd
 import numpy as np
 import plotly.express as px
-from dash import Dash, html, dcc, Input, Output, dash_table, ctx
+from dash import Dash, html, dcc, Input, Output, dash_table
 
 app = Dash(__name__)
 app.title = "Torque Log Visualizer"
 
 app.layout = html.Div([
-    html.H2("Torque Log Visualizer"),
+    html.Div([
+        html.H2("Torque Log Visualizer", style={'marginBottom': '20px'}),
 
-    dcc.Upload(
-        id='upload-data',
-        children=html.Div(['📁 Drag and Drop o ', html.A('Seleccionar CSV')]),
-        style={
-            'width': '100%', 'height': '60px', 'lineHeight': '60px',
-            'borderWidth': '1px', 'borderStyle': 'dashed', 'borderRadius': '5px',
-            'textAlign': 'center', 'margin': '10px 0'
-        },
-        multiple=False
-    ),
+        dcc.Upload(
+            id='upload-data',
+            children=html.Div(['\ud83d\udcc1 Drag and Drop o ', html.A('Seleccionar CSV')]),
+            style={
+                'width': '100%', 'height': '60px', 'lineHeight': '60px',
+                'borderWidth': '1px', 'borderStyle': 'dashed', 'borderRadius': '5px',
+                'textAlign': 'center', 'margin': '10px 0'
+            },
+            multiple=False
+        ),
 
-    dcc.Dropdown(id='metric-dropdown', placeholder='Seleccionar métrica para graficar'),
-    dcc.Dropdown(id='hover-columns-dropdown', multi=True, placeholder='Columnas para hover en mapa'),
+        html.Label("Seleccionar m\u00e9trica a graficar"),
+        dcc.RadioItems(
+            id='metric-dropdown',
+            labelStyle={'display': 'block', 'margin': '3px 0'}
+        ),
 
-    html.Div(id='output-visuals')
-])
+        html.Label("Columnas para hover en mapa", style={'marginTop': '20px'}),
+        dcc.Checklist(
+            id='hover-columns-dropdown',
+            labelStyle={'display': 'block', 'margin': '3px 0'}
+        ),
+
+        html.Label("Modo oscuro", style={'marginTop': '20px'}),
+        dcc.Checklist(
+            id='dark-mode-toggle',
+            options=[{'label': 'Activar', 'value': 'dark'}],
+            value=[],
+            labelStyle={'display': 'inline-block', 'marginRight': '10px'}
+        ),
+    ], style={
+        'width': '300px',
+        'padding': '20px',
+        'borderRight': '1px solid #ccc',
+        'flexShrink': 0
+    }),
+
+    html.Div(id='output-visuals', style={'flexGrow': 1, 'padding': '20px'})
+], style={'display': 'flex', 'minHeight': '100vh'})
 
 def parse_contents(contents):
     content_type, content_string = contents.split(',')
@@ -51,18 +75,19 @@ def parse_contents(contents):
      Output('hover-columns-dropdown', 'options'),
      Output('metric-dropdown', 'value'),
      Output('hover-columns-dropdown', 'value'),
-     Output('output-visuals', 'children')],
+     Output('output-visuals', 'children'),
+     Output('output-visuals', 'style')],
     [Input('upload-data', 'contents'),
      Input('metric-dropdown', 'value'),
-     Input('hover-columns-dropdown', 'value')]
+     Input('hover-columns-dropdown', 'value'),
+     Input('dark-mode-toggle', 'value')]
 )
-def update_output(contents, selected_metric, hover_columns):
+def update_output(contents, selected_metric, hover_columns, dark_mode):
     if not contents:
-        return [], [], None, [], html.Div("🔼 Subí un archivo CSV para comenzar.")
+        return [], [], None, [], html.Div("\ud83d\udd3c Sub\u00ed un archivo CSV para comenzar."), {'flexGrow': 1, 'padding': '20px'}
 
     df = parse_contents(contents)
 
-    # Columnas a excluir de métricas y hover
     excluir_columnas = [
         'Latitude', 'Longitude',
         'Horizontal Dilution of Precision', 'Bearing',
@@ -86,14 +111,18 @@ def update_output(contents, selected_metric, hover_columns):
     if hover_columns is None:
         hover_columns = ['Time', selected_metric]
 
-    # --- MAPA DEL RECORRIDO ---
+    # Estilo de fondo
+    is_dark = 'dark' in (dark_mode or [])
+    dark_style = {
+        'flexGrow': 1,
+        'padding': '20px',
+        'backgroundColor': '#1e1e1e' if is_dark else 'white',
+        'color': 'white' if is_dark else 'black'
+    }
+
     if 'Latitude' in df.columns and 'Longitude' in df.columns and selected_metric:
-        if any(df[selected_metric] < 0) and any(df[selected_metric] > 0):
-            color_scale = px.colors.sequential.RdBu
-            midpoint = 0
-        else:
-            color_scale = px.colors.sequential.Jet
-            midpoint = None
+        color_scale = px.colors.sequential.RdBu if any(df[selected_metric] < 0) and any(df[selected_metric] > 0) else px.colors.sequential.Jet
+        midpoint = 0 if color_scale == px.colors.sequential.RdBu else None
 
         fig_map = px.scatter_map(
             df,
@@ -107,8 +136,9 @@ def update_output(contents, selected_metric, hover_columns):
             hover_data=[col for col in hover_columns if col in df.columns and col not in excluir_columnas]
         )
 
+        map_style = "carto-darkmatter" if is_dark else "carto-positron"
         fig_map.update_layout(
-            mapbox={"style": "carto-positron"},
+            mapbox={"style": map_style},
             margin={"r": 0, "t": 0, "l": 0, "b": 0}
         )
 
@@ -118,38 +148,32 @@ def update_output(contents, selected_metric, hover_columns):
                 'displayModeBar': 'hover',
                 'displaylogo': False,
                 'modeBarButtonsToAdd': ['zoom2d', 'pan2d', 'resetViewMapbox'],
-                'modeBarStyle': {
-                    'top': '40px',
-                    'right': '20px'
-                }
+                'modeBarStyle': {'top': '40px', 'right': '20px'}
             }
         )
     else:
-        map_graph = html.Div("⚠️ El archivo no contiene columnas 'Latitude' y 'Longitude'.")
+        map_graph = html.Div("\u26a0\ufe0f El archivo no contiene columnas 'Latitude' y 'Longitude'.")
 
-    # --- GRAFICO TEMPORAL ---
     if 'Time' in df.columns and selected_metric:
         fig_time = px.line(df.dropna(subset=[selected_metric]), x='Time', y=selected_metric, title=f"{selected_metric} en el tiempo")
         time_graph = html.Div([
-            html.H4("📈 Métrica temporal"),
+            html.H4("\ud83d\udcc8 M\u00e9trica temporal"),
             dcc.Graph(figure=fig_time)
         ], style={'marginTop': '60px'})
     else:
-        time_graph = html.Div("⚠️ No se puede graficar el tiempo.")
+        time_graph = html.Div("\u26a0\ufe0f No se puede graficar el tiempo.")
 
-    # --- ESTADISTICAS ---
     if selected_metric:
         col_data = df[selected_metric].dropna()
-
         unidades = {
             'GPS Speed (Kilometers/hour)': 'km/h',
             'Engine RPM(rpm)': 'rpm',
-            'Ambient air temp(°C)': '°C',
-            'Engine Coolant Temperature(°C)': '°C',
+            'Ambient air temp(\u00b0C)': '\u00b0C',
+            'Engine Coolant Temperature(\u00b0C)': '\u00b0C',
             'Fuel flow rate/hour(l/hr)': 'l/hr',
             'Mass Air Flow Rate(g/s)': 'g/s',
             'Throttle Position(Manifold)(%)': '%',
-            'Timing Advance(°)': '°',
+            'Timing Advance(\u00b0)': '\u00b0',
             'Voltage (Control Module)(V)': 'V'
         }
         unidad = unidades.get(selected_metric, '')
@@ -185,37 +209,26 @@ def update_output(contents, selected_metric, hover_columns):
                 'whiteSpace': 'normal',
             },
             style_cell_conditional=[
-                {
-                    'if': {'column_id': 'Statistic'},
-                    'textAlign': 'left',
-                    'minWidth': '180px', 'width': '180px', 'maxWidth': '180px',
-                },
-                {
-                    'if': {'column_id': 'Value'},
-                    'textAlign': 'right',
-                    'minWidth': '100px', 'width': '100px', 'maxWidth': '100px',
-                },
-                {
-                    'if': {'column_id': 'Unit'},
-                    'textAlign': 'left',
-                    'minWidth': '60px', 'width': '60px', 'maxWidth': '60px',
-                }
+                {'if': {'column_id': 'Statistic'}, 'textAlign': 'left', 'minWidth': '180px', 'width': '180px', 'maxWidth': '180px'},
+                {'if': {'column_id': 'Value'}, 'textAlign': 'right', 'minWidth': '100px', 'width': '100px', 'maxWidth': '100px'},
+                {'if': {'column_id': 'Unit'}, 'textAlign': 'left', 'minWidth': '60px', 'width': '60px', 'maxWidth': '60px'}
             ],
             style_header={
                 'fontWeight': 'bold',
-                'backgroundColor': 'white'
+                'backgroundColor': 'white' if not is_dark else '#333',
+                'color': 'black' if not is_dark else 'white'
             }
         )
     else:
-        stats_table = html.Div("⚠️ No se pudo calcular estadísticas.")
+        stats_table = html.Div("\u26a0\ufe0f No se pudo calcular estad\u00edsticas.")
 
     return metric_options, hover_options, selected_metric, hover_columns, html.Div([
-        html.H4("📍 Mapa del recorrido"),
+        html.H4("\ud83d\udccd Mapa del recorrido"),
         map_graph,
         time_graph,
-        html.H4("📊 Estadísticas"),
+        html.H4("\ud83d\udcca Estad\u00edsticas"),
         stats_table
-    ])
+    ]), dark_style
 
 if __name__ == '__main__':
     app.run(debug=False)
