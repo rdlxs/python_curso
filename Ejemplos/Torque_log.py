@@ -207,7 +207,7 @@ def update_visuals(contents, metrica, hover_columns, timeseries_vars):
         html.Div([
             html.H4("📈 Métrica temporal"),
             dcc.Graph(figure=fig_time)
-        ], style={'marginTop': '40px'}),
+        ], style={'marginTop': '80px'}),
         html.Div([
             html.H4("📉 Comparativa de variables seleccionadas"),
             multi_graph if multi_graph else html.Div("Seleccioná variables para comparar.")
