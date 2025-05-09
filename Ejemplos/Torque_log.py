@@ -119,11 +119,11 @@ def update_output(list_of_contents, selected_value):
 
             # Validar columnas GPS
             if 'Latitude' in df.columns and 'Longitude' in df.columns:
-                fig_map = px.scatter_mapbox(df, lat='Latitude', lon='Longitude', color=selected_value,
+                fig_map = px.scatter_map(df, lat='Latitude', lon='Longitude', color=selected_value,
                                             zoom=10, height=500, color_continuous_scale=color_scale,
                                             color_continuous_midpoint=color_continuous_midpoint,
                                             hover_data=df.columns)
-                fig_map.update_layout(mapbox_style="open-street-map", margin={"r": 0, "t": 0, "l": 0, "b": 0})
+                fig_map.update_layout(map_style="open-street-map", margin={"r": 0, "t": 0, "l": 0, "b": 0})
                 map_fig = dcc.Graph(id='map-plot', figure=fig_map)
             else:
                 map_fig = html.Div("⚠️ El archivo no contiene columnas 'Latitude' y 'Longitude'. No se puede mostrar el mapa.",
