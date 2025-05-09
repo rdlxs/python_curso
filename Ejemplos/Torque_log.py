@@ -133,7 +133,7 @@ def update_output(contents, selected_metric, hover_columns):
         html.Div([
         html.H4("📈 Métrica temporal"),
         time_graph
-    ], style={'marginTop': '50px'}),
+    ], style={'marginTop': '75px'}),
         html.H4("📊 Estadísticas"),
         stats_table
     ])
