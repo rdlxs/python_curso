@@ -148,7 +148,7 @@ def update_visuals(contents, metrica, hover_columns):
         unidad = 'km/h'
 
     stats_data = pd.DataFrame({
-        'Statistic': ['Mean', 'Max', 'Min', 'Start', 'End', '25%', '50%', '75%', '90%'],
+        'Statistic': ['Prom', 'Max', 'Min', 'Start', 'End', '25%', '50%', '75%', '90%'],
         'Value': [
             col_data.mean(), col_data.max(), col_data.min(),
             col_data.iloc[0], col_data.iloc[-1],
