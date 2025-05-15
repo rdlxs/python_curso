@@ -33,13 +33,14 @@ function fetchProgress() {
       container.innerHTML = '';
       downloads.innerHTML = '';
       Object.entries(data).forEach(([task_id, prog]) => {
-        const percent = Math.floor((prog.current / prog.total) * 100);
+        const percent = prog.total > 0 ? Math.floor((prog.current / prog.total) * 100) : 0;
+        const statusText = prog.done ? "✅ Completado" : `⌛ Traduciendo: ${prog.current}/${prog.total}`;
         const bar = `<div style='margin-bottom: 10px;'>
           <strong>${prog.filename}</strong>
           <div style='background: #ddd; width: 100%; height: 20px; border-radius: 5px;'>
             <div style='width: ${percent}%; height: 100%; background: ${prog.done ? "#4CAF50" : "#2196F3"}; border-radius: 5px;'></div>
           </div>
-          <small>${prog.current}/${prog.total}</small>
+          <small>${statusText}</small>
         </div>`;
         container.innerHTML += bar;
         if (prog.done) {
@@ -85,36 +86,40 @@ def download_file(filename):
     return send_file(os.path.join(OUTPUT_FOLDER, filename), as_attachment=True)
 
 def traducir_ass(input_file, output_file, task_id):
-    with open(input_file, 'r', encoding='utf-8') as f:
-        lines = f.readlines()
+    try:
+        with open(input_file, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
 
-    dialog_lines = [line for line in lines if line.startswith("Dialogue:")]
-    progress_dict[task_id]['total'] = len(dialog_lines)
-    progress_dict[task_id]['current'] = 0
+        dialog_lines = [line for line in lines if line.startswith("Dialogue:")]
+        progress_dict[task_id]['total'] = len(dialog_lines)
+        progress_dict[task_id]['current'] = 0
 
-    traducciones = []
-    for line in lines:
-        if line.startswith("Dialogue:"):
-            partes = line.strip().split(",", 9)
-            if len(partes) == 10:
-                texto_original = partes[9]
-                texto_limpio = texto_original.replace("{\\an8}", "")
-                try:
-                    traduccion = GoogleTranslator(source='ru', target='es').translate(texto_limpio)
-                except:
-                    traduccion = texto_original
-                partes[9] = traduccion
-                traducciones.append(",".join(partes) + "\n")
-                progress_dict[task_id]['current'] += 1
+        traducciones = []
+        for line in lines:
+            if line.startswith("Dialogue:"):
+                partes = line.strip().split(",", 9)
+                if len(partes) == 10:
+                    texto_original = partes[9]
+                    texto_limpio = texto_original.replace("{\\an8}", "")
+                    try:
+                        traduccion = GoogleTranslator(source='ru', target='es').translate(texto_limpio)
+                    except Exception as e:
+                        traduccion = texto_original + f" [ERROR: {str(e)}]"
+                    partes[9] = traduccion
+                    traducciones.append(",".join(partes) + "\n")
+                    progress_dict[task_id]['current'] += 1
+                else:
+                    traducciones.append(line)
             else:
                 traducciones.append(line)
-        else:
-            traducciones.append(line)
 
-    with open(output_file, 'w', encoding='utf-8') as f:
-        f.writelines(traducciones)
+        with open(output_file, 'w', encoding='utf-8') as f:
+            f.writelines(traducciones)
 
-    progress_dict[task_id]['done'] = True
+        progress_dict[task_id]['done'] = True
+    except Exception as e:
+        progress_dict[task_id]['done'] = True
+        progress_dict[task_id]['output_file'] = f"ERROR: {str(e)}"
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
