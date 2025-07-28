@@ -5,6 +5,8 @@ import tempfile
 import shutil
 import time
 
+###sin psutil
+
 PACKAGE_NAME = "grass"
 DEB_FILENAME = "Grass_5.5.4_amd64.deb"
 FTP_HOST = "10.254.125.162"
