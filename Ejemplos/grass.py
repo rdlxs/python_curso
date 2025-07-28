@@ -2,7 +2,6 @@ import os
 import subprocess
 import ftplib
 import tempfile
-import psutil
 import shutil
 import time
 
@@ -20,20 +19,26 @@ def is_package_installed(pkg_name):
 
 
 def kill_process_if_running(pkg_name):
-    print(f"🔍 Buscando procesos que contengan '{pkg_name}'...")
-    current_pid = os.getpid()
+    current_pid = str(os.getpid())
 
-    for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
-        try:
-            if proc.info['pid'] == current_pid:
-                continue  # No te mates a vos mismo
+    try:
+        # Obtenemos todos los procesos que contienen el nombre del paquete
+        result = subprocess.run(["pgrep", "-f", pkg_name], capture_output=True, text=True)
+        if result.returncode != 0:
+            print("✅ No hay procesos activos que coincidan.")
+            return
 
-            # Verificamos si el nombre o la línea de comando contiene el nombre del paquete
-            if any(pkg_name in str(arg) for arg in proc.info['cmdline']):
-                print(f"🛑 Matando proceso PID {proc.info['pid']}: {' '.join(proc.info['cmdline'])}")
-                proc.kill()
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
-            continue
+        pids = result.stdout.strip().split("\n")
+        for pid in pids:
+            if pid == current_pid:
+                print(f"⚠️ Ignorando PID {pid} (es el proceso actual del script)")
+                continue
+            # Verificamos qué comando es ese PID
+            cmdline = subprocess.run(["ps", "-p", pid, "-o", "cmd="], capture_output=True, text=True).stdout.strip()
+            print(f"🛑 Matando PID {pid}: {cmdline}")
+            subprocess.run(["kill", "-9", pid])
+    except Exception as e:
+        print(f"❌ Error al intentar matar procesos: {e}")
 
 def uninstall_package(pkg_name):
     print(f"🧼 Desinstalando {pkg_name} si está presente...")
