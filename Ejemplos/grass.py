@@ -7,7 +7,7 @@ import time
 
 PACKAGE_NAME = "grass"
 DEB_FILENAME = "Grass_5.5.4_amd64.deb"
-FTP_HOST = "ftp://10.254.125.162/Repositorio/img_routers/"
+FTP_HOST = "10.254.125.162/Repositorio/img_routers/"
 FTP_USER = "root"
 FTP_PASS = "manager01"
 
