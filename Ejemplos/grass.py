@@ -59,7 +59,6 @@ def main():
     try:
         subprocess.run(["apt", "update"], check=True)
         if is_package_installed(PACKAGE_NAME):
-            kill_process_if_running(PACKAGE_NAME)
             uninstall_package(PACKAGE_NAME)
         fix_tmp_permissions()
         deb_path = download_deb_from_ftp()
