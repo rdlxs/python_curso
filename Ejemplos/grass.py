@@ -18,9 +18,13 @@ def is_package_installed(pkg_name):
 
 def kill_process_if_running(pkg_name):
     result = subprocess.run(["pgrep", "-f", pkg_name], capture_output=True, text=True)
+    current_pid = str(os.getpid())
     if result.stdout:
         pids = result.stdout.strip().split("\n")
         for pid in pids:
+            if pid == current_pid:
+                print(f"⚠️ Ignorando PID {pid} (es el proceso actual del script)")
+                continue
             print(f"🛑 Matando proceso activo: PID {pid}")
             subprocess.run(["kill", "-9", pid])
 
