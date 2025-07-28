@@ -12,6 +12,8 @@ FTP_DIR = "/Repositorio/img_routers/"
 FTP_USER = "root"
 FTP_PASS = "manager01"
 
+###sin kill process
+
 def is_package_installed(pkg_name):
     result = subprocess.run(["dpkg", "-l", pkg_name], capture_output=True, text=True)
     return pkg_name in result.stdout
