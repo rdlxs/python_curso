@@ -7,7 +7,7 @@ import re
 APP_KEYWORD = "Grass"  # Palabra clave del paquete a desinstalar
 PROCESS_NAME = "grass"  # Nombre del proceso a cerrar
 ftp_url = "ftp://root:manager01@10.254.125.162/Repositorio/img_routers/Grass_5.5.4_amd64.deb"
-output_file = "/tmp/Grass_5.5.4_amd64.deb"
+output_file = "/root/Grass_5.5.4_amd64.deb"
 
 def get_installed_package(keyword):
     """Busca el nombre exacto del paquete que coincide con la palabra clave"""
