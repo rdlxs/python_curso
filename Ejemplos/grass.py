@@ -2,6 +2,7 @@ import os
 import subprocess
 import ftplib
 import tempfile
+import psutil
 import shutil
 import time
 
@@ -12,11 +13,27 @@ FTP_DIR = "/Repositorio/img_routers/"
 FTP_USER = "root"
 FTP_PASS = "manager01"
 
-###sin kill process
 
 def is_package_installed(pkg_name):
     result = subprocess.run(["dpkg", "-l", pkg_name], capture_output=True, text=True)
     return pkg_name in result.stdout
+
+
+def kill_process_if_running(pkg_name):
+    print(f"🔍 Buscando procesos que contengan '{pkg_name}'...")
+    current_pid = os.getpid()
+
+    for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+        try:
+            if proc.info['pid'] == current_pid:
+                continue  # No te mates a vos mismo
+
+            # Verificamos si el nombre o la línea de comando contiene el nombre del paquete
+            if any(pkg_name in str(arg) for arg in proc.info['cmdline']):
+                print(f"🛑 Matando proceso PID {proc.info['pid']}: {' '.join(proc.info['cmdline'])}")
+                proc.kill()
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
 
 def uninstall_package(pkg_name):
     print(f"🧼 Desinstalando {pkg_name} si está presente...")
@@ -61,6 +78,7 @@ def main():
     try:
         subprocess.run(["apt", "update"], check=True)
         if is_package_installed(PACKAGE_NAME):
+            kill_process_if_running(PACKAGE_NAME)
             uninstall_package(PACKAGE_NAME)
         fix_tmp_permissions()
         deb_path = download_deb_from_ftp()
