@@ -7,7 +7,8 @@ import time
 
 PACKAGE_NAME = "grass"
 DEB_FILENAME = "Grass_5.5.4_amd64.deb"
-FTP_HOST = "10.254.125.162/Repositorio/img_routers/"
+FTP_HOST = "10.254.125.162"
+FTP_DIR = "/Repositorio/img_routers/"
 FTP_USER = "root"
 FTP_PASS = "manager01"
 
@@ -33,6 +34,7 @@ def download_deb_from_ftp():
     print(f"📡 Conectando a FTP: {FTP_HOST}")
     with ftplib.FTP(FTP_HOST) as ftp:
         ftp.login(FTP_USER, FTP_PASS)
+        ftp.cwd(FTP_DIR)
         with open(deb_path, "wb") as f:
             print(f"⬇️  Descargando {DEB_FILENAME} a {deb_path}")
             ftp.retrbinary(f"RETR {DEB_FILENAME}", f.write)
