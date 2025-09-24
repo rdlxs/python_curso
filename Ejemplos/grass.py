@@ -8,7 +8,7 @@ import time
 ###sin psutil
 
 PACKAGE_NAME = "grass"
-DEB_FILENAME = "Grass_5.6.2_amd64.deb"
+DEB_FILENAME = "Grass_5.7.1_amd64.deb"
 FTP_HOST = "10.254.125.162"
 FTP_DIR = "/Repositorio/img_routers/"
 FTP_USER = "root"
