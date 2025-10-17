@@ -5,6 +5,7 @@ from typing import Dict, Any, List, Tuple
 import streamlit as st
 import pandas as pd
 import networkx as nx
+import yangson 
 import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="SAIN Assurance Graph Builder — Pro+", layout="wide")
@@ -482,51 +483,67 @@ with mid:
     else:
         st.success("Sin problemas detectados. El grafo es acíclico y los parámetros básicos parecen correctos.")
 
-    # Validación opcional con yangson (si está instalado y se suben módulos)
-    st.markdown("#### ✅ Validación YANG estricta (opcional)")
-    st.caption("Subí los módulos `.yang` y una `yang-library.json` (por ejemplo, los del RFC 9418). Intentaré validar la instancia con **yangson** si está instalado.")
-    yang_files = st.file_uploader("Módulos YANG (.yang) — podés subir varios", type=["yang"], accept_multiple_files=True)
-    yang_lib = st.file_uploader("yang-library.json", type=["json"])
-    if st.button("Ejecutar validación YANG (si es posible)"):
-        try:
-            import tempfile, os
-            from yangson.datamodel import DataModel
-            from yangson.context import Context
-            from yangson.instance import Instance
-            # Guardar archivos a un dir temp
-            with tempfile.TemporaryDirectory() as td:
-                mod_dir = os.path.join(td, "mods")
-                os.makedirs(mod_dir, exist_ok=True)
-                for f in yang_files or []:
-                    open(os.path.join(mod_dir, f.name), "wb").write(f.read())
-                if yang_lib is None:
-                    st.warning("Falta 'yang-library.json'. No se puede validar.")
-                else:
-                    yl = json.loads(yang_lib.read())
-                    # Crear DataModel
-                    dm = DataModel.from_yang_library(yl, [mod_dir])
-                    ctx = Context(dm)
-                    # Instancia JSON a validar
-                    instance_json = build_json()
-                    inst = Instance(ctx, instance_json)
-                    st.success("Validación YANG completada sin errores con yangson.")
-        except ModuleNotFoundError:
-            st.info("No encontré el módulo 'yangson'. Instalalo con: `pip install yangson`")
-        except Exception as e:
-            st.error(f"Error al validar con yangson: {e}")
+# Validación opcional con yangson (si está instalado y se suben módulos)
+st.markdown("#### ✅ Validación YANG estricta (opcional)")
+st.caption("Subí los módulos `.yang` y una `yang-library.json` (por ejemplo, los del RFC 9418). Se valida con **yangson** si está instalado.")
+yang_files = st.file_uploader("Módulos YANG (.yang) — podés subir varios", type=["yang"], accept_multiple_files=True)
+yang_lib = st.file_uploader("yang-library.json", type=["json"])
+
+if st.button("Ejecutar validación YANG (si es posible)"):
+    try:
+        import tempfile, os, json as _json
+        from yangson.datamodel import DataModel
+        from yangson.enumerations import ContentType
+
+        with tempfile.TemporaryDirectory() as td:
+            mod_dir = os.path.join(td, "mods")
+            os.makedirs(mod_dir, exist_ok=True)
+
+            # Guardar módulos .yang
+            for f in yang_files or []:
+                with open(os.path.join(mod_dir, f.name), "wb") as out:
+                    out.write(f.read())
+
+            if yang_lib is None:
+                st.warning("Falta 'yang-library.json'. No se puede validar.")
+            else:
+                yl = _json.loads(yang_lib.read())       # dict de la YANG library
+                # 1) Crear DataModel desde la YANG library y el path de módulos
+                #    Opción A: constructor directo con el JSON en string
+                dm = DataModel(yltxt=_json.dumps(yl), mod_path=(mod_dir,))
+                #    (Alternativa oficial): DataModel.from_file("yang-library.json", [mod_dir])
+
+                # 2) Tomar la instancia que exporta la app (RFC 9418) y validarla
+                instance_json = build_json()             # dict Python
+                inst = dm.from_raw(instance_json)        # parsea a instancia yangson
+                inst.validate(ctype=ContentType.all)     # validación completa
+
+                st.success("Validación YANG completada sin errores con yangson.")
+    except ModuleNotFoundError:
+        st.info("No encontré el módulo 'yangson'. Instalalo con: `pip install yangson`")
+    except Exception as e:
+        st.error(f"Error al validar con yangson: {e}")
 
     # Export DOT (Graphviz)
-    def to_dot(G: nx.DiGraph) -> str:
-        lines = ["digraph assurance {"]
-        for n, data in G.nodes(data=True):
-            color = get_color(data.get("type", ""))
-            label = n.replace('"', '\\"')
-            lines.append(f'  "{label}" [style=filled, fillcolor="{color}", shape=box];')
-        for u, v, data in G.edges(data=True):
-            dep = data.get("dep", "")
-            lines.append(f'  "{u.replace(chr(34),"\\\"")}" -> "{v.replace(chr(34),"\\\"")}" [label="{dep}"];')
-        lines.append("}")
-        return "\n".join(lines)
+def to_dot(G: nx.DiGraph) -> str:
+    def esc(s: str) -> str:
+        # Escape de comillas dobles para DOT
+        return s.replace('"', r'\"')
+
+    lines = ["digraph assurance {"]
+    for n, data in G.nodes(data=True):
+        color = get_color(data.get("type", ""))
+        label = esc(n)
+        lines.append(f'  "{label}" [style=filled, fillcolor="{color}", shape=box];')
+
+    for u, v, data in G.edges(data=True):
+        dep = data.get("dep", "")
+        u_lab = esc(u)
+        v_lab = esc(v)
+        lines.append(f'  "{u_lab}" -> "{v_lab}" [label="{dep}"];')
+
+    lines.append("}")
+    return "\n".join(lines)
 
     dot_str = to_dot(G)
     st.download_button("⬇️ Descargar Graphviz .dot", data=dot_str.encode("utf-8"), file_name="assurance_graph.dot", mime="text/vnd.graphviz")
