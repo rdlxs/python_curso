@@ -145,8 +145,7 @@ now_ts = time.time()
 if auto and (now_ts - st.session_state.last_refresh >= interval):
     do_measurement(ips)
     st.session_state.last_refresh = now_ts
-    # Rerun suave para renderizar nuevos contadores
-    (getattr(st, "rerun", st.experimental_rerun))()
+    st.rerun()  # nuevo método, reemplaza al experimental_rerun()
 
 # KPIs + Tabla
 df_view = build_table(ips)
