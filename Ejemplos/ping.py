@@ -1,4 +1,4 @@
-# ping_dashboard.py  (Windows/Linux/macOS) con Auto-Refresh y Contadores de pérdida
+# ping_dashboard.py  (Windows/Linux/macOS) con Auto-Refresh estable
 import platform, re, subprocess, time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
@@ -10,15 +10,13 @@ import streamlit as st
 # -----------------------------
 def build_ping(ip: str) -> list[str]:
     if platform.system() == "Windows":
-        # -n 1: 1 eco; -w 1000: timeout 1000 ms
         return ["ping", "-n", "1", "-w", "1000", ip]
     else:
-        # -c 1: 1 eco; -W 1: timeout 1 s (Linux). En macOS, -W 1 también funciona.
         return ["ping", "-c", "1", "-W", "1", ip]
 
 _RTT_PATTERNS = [
-    re.compile(r"(?:time)[=<]\s*([0-9]+(?:\.[0-9]+)?)\s*ms", re.IGNORECASE),     # time=12.3 ms
-    re.compile(r"(?:tiempo)[=<]\s*([0-9]+(?:\.[0-9]+)?)\s*ms", re.IGNORECASE),   # tiempo=12.3 ms (Win ES)
+    re.compile(r"(?:time)[=<]\s*([0-9]+(?:\.[0-9]+)?)\s*ms", re.IGNORECASE),
+    re.compile(r"(?:tiempo)[=<]\s*([0-9]+(?:\.[0-9]+)?)\s*ms", re.IGNORECASE),
 ]
 _RTT_SUMMARY = re.compile(r"(?:Media|Promedio|Average)\s*=\s*([0-9]+)\s*ms", re.IGNORECASE)
 
@@ -42,7 +40,6 @@ def ping_once(ip: str) -> dict:
         out = (p.stdout or "") + (p.stderr or "")
     except subprocess.TimeoutExpired:
         out = ""
-
     rtt = parse_rtt_ms(out)
     alive = bool(re.search(r"\bttl\s*=\s*[0-9]+", out, re.IGNORECASE)) or (rtt is not None)
     return {"ip": ip, "alive": alive, "rtt_ms": rtt}
@@ -57,32 +54,28 @@ def ping_many(ips):
     return results
 
 # -----------------------------
-# Streamlit UI
+# Streamlit UI + Estado
 # -----------------------------
 st.set_page_config(page_title="Ping Dashboard", layout="wide")
 st.title("Ping dashboard — ICMP simple (con auto-refresh)")
 
-# Estado global de contadores
+# Estado global
 if "stats" not in st.session_state:
     st.session_state.stats = {}  # { ip: {"sent":0,"recv":0,"last_rtt":None,"last_alive":False,"last_checked":""} }
-if "running" not in st.session_state:
-    st.session_state.running = False
 if "last_refresh" not in st.session_state:
     st.session_state.last_refresh = 0.0
+if "auto_refresh" not in st.session_state:
+    st.session_state.auto_refresh = False
+if "interval" not in st.session_state:
+    st.session_state.interval = 3
 
 with st.sidebar:
     st.header("Control")
-    auto = st.checkbox("Auto-refresh", value=st.session_state.running)
-    interval = st.slider("Intervalo (seg)", min_value=1, max_value=30, value=3, step=1)
-    cols = st.columns(2)
-    with cols[0]:
-        if st.button("Iniciar" if not st.session_state.running else "Detener"):
-            st.session_state.running = not st.session_state.running
-            auto = st.session_state.running
-    with cols[1]:
-        if st.button("Reset contadores"):
-            st.session_state.stats = {}
-            st.success("Contadores reseteados.")
+    st.checkbox("Auto-refresh", key="auto_refresh")
+    st.slider("Intervalo (seg)", min_value=1, max_value=30, key="interval")
+    if st.button("Reset contadores"):
+        st.session_state.stats = {}
+        st.success("Contadores reseteados.")
 
 ips_text = st.text_area("IPs/hosts (una por línea)", "8.8.8.8\n1.1.1.1", height=120)
 
@@ -90,7 +83,7 @@ colA, colB = st.columns(2)
 with colA:
     run_once = st.button("Ejecutar ahora")
 with colB:
-    st.caption("Tip: activá **Auto-refresh** para ver el conteo ICMP y pérdidas en tiempo real.")
+    st.caption("Activá **Auto-refresh** en la barra lateral para ver los contadores en tiempo real.")
 
 def update_stats(measurements: list[dict]):
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -111,11 +104,8 @@ def build_table(ips: list[str]) -> pd.DataFrame:
     rows = []
     for ip in ips:
         s = st.session_state.stats.get(ip, {"sent": 0, "recv": 0, "last_rtt": None, "last_alive": False, "last_checked": ""})
-        sent = s["sent"]
-        recv = s["recv"]
-        loss_pct = None
-        if sent > 0:
-            loss_pct = round((1 - (recv / sent)) * 100, 2)
+        sent = s["sent"]; recv = s["recv"]
+        loss_pct = round((1 - (recv / sent)) * 100, 2) if sent > 0 else None
         rows.append({
             "IP/Host": ip,
             "Estado": "UP" if s["last_alive"] else "DOWN",
@@ -140,12 +130,12 @@ ips = [l.strip() for l in ips_text.splitlines() if l.strip()]
 if run_once:
     do_measurement(ips)
 
-# Disparo automático
+# 🔁 Disparo automático (estable con session_state)
 now_ts = time.time()
-if auto and (now_ts - st.session_state.last_refresh >= interval):
+if st.session_state.auto_refresh and (now_ts - st.session_state.last_refresh >= st.session_state.interval):
     do_measurement(ips)
     st.session_state.last_refresh = now_ts
-    st.rerun()  # nuevo método, reemplaza al experimental_rerun()
+    st.rerun()  # Streamlit moderno
 
 # KPIs + Tabla
 df_view = build_table(ips)
