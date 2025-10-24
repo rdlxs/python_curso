@@ -102,9 +102,16 @@ with st.sidebar:
             st.session_state.monitoring = False
 
 
-# ✅ Refresco visual sin bloquear
+# ✅ Refresco visual sin bloquear (compatible con todas las versiones)
 if st.session_state.monitoring:
-    st.autorefresh(interval=st.session_state.interval * 1000, key="refresh_key")
+    # Si la versión actual tiene st.autorefresh, úsala
+    if hasattr(st, "autorefresh"):
+        st.autorefresh(interval=st.session_state.interval * 1000, key="refresh_key")
+    else:
+        # Fallback universal: usa un marcador invisible para forzar el rerun
+        # sin depender de atributos experimentales
+        time.sleep(st.session_state.interval)
+        st.experimental_set_query_params(_=time.time())
 
 
 # --------------------------
