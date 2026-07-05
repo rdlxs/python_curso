@@ -1,0 +1,37 @@
+#cloud-config
+autoinstall:
+  version: 1
+
+  locale: es_AR.UTF-8
+  keyboard:
+    layout: latam
+    variant: ""
+
+  timezone: America/Argentina/Buenos_Aires
+
+  identity:
+    hostname: ubuntu-desk-1
+    username: idtt
+    password: "$6$FRWQvHCtaqWrZejv$uMN3//kul.CPus.2sUl0FagW8hMqtBnuRQdCHgBb0CVE3ISIHyj8FJNirJq2Tvdkb5yD9yFIU8Rmnq2AQ7kIZ."
+
+  ssh:
+    install-server: true
+    allow-pw: true
+
+  storage:
+    layout:
+      name: direct
+
+  packages:
+    - nano
+    - curl
+    - net-tools
+    - openssh-server
+    - wget
+    - tcpdump
+    - traceroute
+
+  updates: security
+
+  late-commands:
+    - curtin in-target --target=/target -- systemctl enable ssh
