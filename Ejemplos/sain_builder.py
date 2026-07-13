@@ -1,11 +1,10 @@
 
 import json
 import io
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any
 import streamlit as st
 import pandas as pd
 import networkx as nx
-import yangson 
 import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="SAIN Assurance Graph Builder — Pro+", layout="wide")
@@ -491,7 +490,9 @@ yang_lib = st.file_uploader("yang-library.json", type=["json"])
 
 if st.button("Ejecutar validación YANG (si es posible)"):
     try:
-        import tempfile, os, json as _json
+        import tempfile
+        import os
+        import json as _json
         from yangson.datamodel import DataModel
         from yangson.enumerations import ContentType
 
@@ -563,7 +564,7 @@ with right:
                 levels[n] = max([levels.get(p, 0) + 1 for p in G.predecessors(n)] + [0])
             pos = {}
             for lvl in sorted(set(levels.values())):
-                same = [n for n, l in levels.items() if l == lvl]
+                same = [n for n, l in levels.items() if l == lvl]  # noqa: E741
                 for i, n in enumerate(same):
                     pos[n] = (i, -lvl)
         except nx.NetworkXUnfeasible:
