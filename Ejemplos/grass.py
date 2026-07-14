@@ -2,8 +2,6 @@ import os
 import subprocess
 import ftplib
 import tempfile
-import shutil
-import time
 
 ###sin psutil
 
