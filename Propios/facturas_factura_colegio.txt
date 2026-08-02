@@ -1,0 +1,138 @@
+Tipo: Factura Colegio
+Fecha de emisión: 03/03/2026
+Número de factura: 02213-00206069
+Monto: $31161200
+CUIT: 30610211638
+----------------------------------------
+Tipo: Factura Colegio
+Fecha de emisión: 03/03/2026
+Número de factura: 02213-00207059
+Monto: $3120000
+CUIT: 30610211638
+----------------------------------------
+Tipo: Factura Colegio
+Fecha de emisión: 26/03/2026
+Número de factura: 02213-00207707
+Monto: $3000000
+CUIT: 30610211638
+----------------------------------------
+Tipo: Factura Colegio
+Fecha de emisión: 01/04/2026
+Número de factura: 02213-00207982
+Monto: $31161200
+CUIT: 30610211638
+----------------------------------------
+Tipo: Factura Colegio
+Fecha de emisión: 01/04/2026
+Número de factura: 02213-00209001
+Monto: $6000000
+CUIT: 30610211638
+----------------------------------------
+Tipo: Factura Colegio
+Fecha de emisión: 05/05/2026
+Número de factura: 02213-00209973
+Monto: $32676700
+CUIT: 30610211638
+----------------------------------------
+Tipo: Factura Colegio
+Fecha de emisión: 05/05/2026
+Número de factura: 02213-00210973
+Monto: $8300000
+CUIT: 30610211638
+----------------------------------------
+Tipo: Factura Colegio
+Fecha de emisión: 19/05/2026
+Número de factura: 02213-00211740
+Monto: $2510000
+CUIT: 30610211638
+----------------------------------------
+Tipo: Factura Colegio
+Fecha de emisión: 01/06/2026
+Número de factura: 02213-00211888
+Monto: $32676700
+CUIT: 30610211638
+----------------------------------------
+Tipo: Factura Colegio
+Fecha de emisión: 01/06/2026
+Número de factura: 02213-00212878
+Monto: $10120000
+CUIT: 30610211638
+----------------------------------------
+Tipo: Factura Colegio
+Fecha de emisión: 01/07/2026
+Número de factura: 02213-00213569
+Monto: $34598100
+CUIT: 30610211638
+----------------------------------------
+Tipo: Factura Colegio
+Fecha de emisión: 01/07/2026
+Número de factura: 02213-00214553
+Monto: $12950000
+CUIT: 30610211638
+----------------------------------------
+Tipo: Factura Colegio
+Fecha de emisión: 03/03/2026
+Número de factura: 02213-00206070
+Monto: $18169300
+CUIT: 30610211638
+----------------------------------------
+Tipo: Factura Colegio
+Fecha de emisión: 03/03/2026
+Número de factura: 02213-00207060
+Monto: $19195000
+CUIT: 30610211638
+----------------------------------------
+Tipo: Factura Colegio
+Fecha de emisión: 09/03/2026
+Número de factura: 02213-00207613
+Monto: $5500000
+CUIT: 30610211638
+----------------------------------------
+Tipo: Factura Colegio
+Fecha de emisión: 01/04/2026
+Número de factura: 02213-00207983
+Monto: $18169300
+CUIT: 30610211638
+----------------------------------------
+Tipo: Factura Colegio
+Fecha de emisión: 01/04/2026
+Número de factura: 02213-00209002
+Monto: $24695000
+CUIT: 30610211638
+----------------------------------------
+Tipo: Factura Colegio
+Fecha de emisión: 05/05/2026
+Número de factura: 02213-00209974
+Monto: $18999300
+CUIT: 30610211638
+----------------------------------------
+Tipo: Factura Colegio
+Fecha de emisión: 05/05/2026
+Número de factura: 02213-00210974
+Monto: $25995000
+CUIT: 30610211638
+----------------------------------------
+Tipo: Factura Colegio
+Fecha de emisión: 01/06/2026
+Número de factura: 02213-00211889
+Monto: $18999300
+CUIT: 30610211638
+----------------------------------------
+Tipo: Factura Colegio
+Fecha de emisión: 01/06/2026
+Número de factura: 02213-00212879
+Monto: $27795000
+CUIT: 30610211638
+----------------------------------------
+Tipo: Factura Colegio
+Fecha de emisión: 01/07/2026
+Número de factura: 02213-00213570
+Monto: $20105300
+CUIT: 30610211638
+----------------------------------------
+Tipo: Factura Colegio
+Fecha de emisión: 01/07/2026
+Número de factura: 02213-00214554
+Monto: $29135000
+CUIT: 30610211638
+----------------------------------------

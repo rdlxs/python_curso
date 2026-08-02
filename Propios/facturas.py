@@ -12,8 +12,14 @@ import io
 import sys
 import pytesseract
 
-# Config Tesseract (Windows)
-pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+
+# ----------------------------
+# Configuración de Tesseract
+# ----------------------------
+# Modificar esta ruta si Tesseract está instalado en otra ubicación.
+pytesseract.pytesseract.tesseract_cmd = (
+    r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+)
 
 
 # ----------------------------
@@ -21,6 +27,7 @@ pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tessera
 # ----------------------------
 class FacturaResult(TypedDict):
     tipo: str
+    nombre: NotRequired[str]
     fecha_emision: NotRequired[str]
     fecha_vencimiento: NotRequired[str]
     numero: NotRequired[str]
@@ -31,66 +38,199 @@ class FacturaResult(TypedDict):
 # ----------------------------
 # Helpers: número de factura
 # ----------------------------
-def normalizar_numero_factura(pv: str, numero_crudo: str) -> str:
+def normalizar_numero_factura(
+    punto_venta: str,
+    numero_crudo: str
+) -> str:
     """
-    Devuelve: PPPPP-NNNNNNNN
-    - PV a 5 dígitos con ceros a la izquierda
-    - Número: SIEMPRE últimos 8 dígitos (descarta ceros extra)
+    Normaliza el número de factura al formato:
+
+        PPPPP-NNNNNNNNN
+
+    Ejemplo:
+        2213-000206069
+        02213-000206069
+
+    - Punto de venta: 5 dígitos.
+    - Número de comprobante: 9 dígitos.
     """
-    pv5 = re.sub(r"\D", "", pv).zfill(5)
-    num = re.sub(r"\D", "", numero_crudo)
-    num8 = num[-8:].zfill(8)
-    return f"{pv5}-{num8}"
+    pv_limpio = re.sub(r"\D", "", punto_venta)
+    numero_limpio = re.sub(r"\D", "", numero_crudo)
+
+    pv5 = pv_limpio.zfill(5)
+
+    # Conserva siempre los últimos 9 dígitos.
+    numero9 = numero_limpio[-9:].zfill(9)
+
+    return f"{pv5}-{numero9}"
 
 
 def extraer_numero_factura_auto(texto: str) -> Optional[str]:
     """
-    Detecta PV y número de factura desde texto.
-    Devuelve PPPPP-NNNNNNNN o None.
-    """
-    # 1) Formatos típicos: "Nº 0261-000204905", "N°", "Nro", "No", "Número"
-    patrones = [
-        r"\bN[º°o]?\s*[:\-]?\s*0*(\d{1,5})\s*-\s*0*(\d{6,})\b",
-        r"\bNro\.?\s*[:\-]?\s*0*(\d{1,5})\s*-\s*0*(\d{6,})\b",
-        r"\bNo\.?\s*[:\-]?\s*0*(\d{1,5})\s*-\s*0*(\d{6,})\b",
-        r"\bNúm(?:ero)?\.?\s*[:\-]?\s*0*(\d{1,5})\s*-\s*0*(\d{6,})\b",
-        r"\bFactura\s+N[º°o]?\s*[:\-]?\s*0*(\d{1,5})\s*-\s*0*(\d{6,})\b",
-    ]
-    for pat in patrones:
-        m = re.search(pat, texto, flags=re.IGNORECASE)
-        if m:
-            return normalizar_numero_factura(m.group(1), m.group(2))
+    Detecta automáticamente el punto de venta y el número
+    de factura.
 
-    # 2) Estilo AFIP: "Punto de Venta: XXXX ... Comp. Nro: YYYY"
-    m2 = re.search(
-        r"Punto\s+de\s+Venta\s*[:\-]?\s*0*(\d{1,5}).*?Comp\.?\s*Nro\.?\s*[:\-]?\s*0*(\d+)",
+    Devuelve el formato:
+
+        PPPPP-NNNNNNNNN
+    """
+    patrones = [
+        (
+            r"\bN[º°o]?\s*[:\-]?\s*"
+            r"0*(\d{1,5})\s*-\s*(\d{6,})\b"
+        ),
+        (
+            r"\bNro\.?\s*[:\-]?\s*"
+            r"0*(\d{1,5})\s*-\s*(\d{6,})\b"
+        ),
+        (
+            r"\bNo\.?\s*[:\-]?\s*"
+            r"0*(\d{1,5})\s*-\s*(\d{6,})\b"
+        ),
+        (
+            r"\bNúm(?:ero)?\.?\s*[:\-]?\s*"
+            r"0*(\d{1,5})\s*-\s*(\d{6,})\b"
+        ),
+        (
+            r"\bFactura\s+N[º°o]?\s*[:\-]?\s*"
+            r"0*(\d{1,5})\s*-\s*(\d{6,})\b"
+        ),
+    ]
+
+    for patron in patrones:
+        match = re.search(
+            patron,
+            texto,
+            flags=re.IGNORECASE
+        )
+
+        if match:
+            return normalizar_numero_factura(
+                match.group(1),
+                match.group(2)
+            )
+
+    # Formato típico de comprobantes AFIP:
+    #
+    # Punto de Venta: 00001
+    # Comp. Nro: 000000123
+    match_afip = re.search(
+        r"Punto\s+de\s+Venta\s*[:\-]?\s*"
+        r"0*(\d{1,5})"
+        r".*?"
+        r"Comp\.?\s*Nro\.?\s*[:\-]?\s*(\d+)",
         texto,
         flags=re.IGNORECASE | re.DOTALL
     )
-    if m2:
-        return normalizar_numero_factura(m2.group(1), m2.group(2))
+
+    if match_afip:
+        return normalizar_numero_factura(
+            match_afip.group(1),
+            match_afip.group(2)
+        )
 
     return None
+
+
+# ----------------------------
+# Helpers: nombre
+# ----------------------------
+def extraer_nombre_alumno(texto: str) -> Optional[str]:
+    """
+    Extrae el nombre correspondiente al campo Alumno/a.
+
+    Ejemplo original:
+
+        Alumno/a: 0261025403 MOMEÑO PENSA, MARTINA
+
+    Resultado:
+
+        MOMEÑO PENSA, MARTINA
+    """
+    # Algunos PDF utilizan espacios Unicode no separables.
+    texto_limpio = texto.replace("\xa0", " ")
+
+    match = re.search(
+        r"^\s*Alumno\s*/\s*a\s*:\s*(.+?)\s*$",
+        texto_limpio,
+        flags=re.IGNORECASE | re.MULTILINE
+    )
+
+    if not match:
+        return None
+
+    contenido = match.group(1)
+
+    # Normaliza espacios múltiples.
+    contenido = re.sub(r"\s+", " ", contenido).strip()
+
+    # Elimina el código numérico del alumno.
+    contenido = re.sub(
+        r"^\d{5,}\s+",
+        "",
+        contenido
+    ).strip()
+
+    return contenido if contenido else None
 
 
 # ----------------------------
 # Extractores por tipo
 # ----------------------------
 def extraer_datos_tipo1(texto: str) -> FacturaResult:
-    """Factura del colegio (arancel/variable/reinscripción, etc.)"""
-    fecha = re.search(r"Fecha:\s*(\d{2}/\d{2}/\d{4})", texto)
+    """
+    Factura del colegio:
+    arancel, variable, reinscripción, etc.
+    """
+    fecha = re.search(
+        r"Fecha:\s*(\d{2}/\d{2}/\d{4})",
+        texto
+    )
 
-    numero = extraer_numero_factura_auto(texto) or "No encontrado"
+    numero = (
+        extraer_numero_factura_auto(texto)
+        or "No encontrado"
+    )
 
-    vto = re.search(r"Vto:\s*(\d{2}/\d{2}/\d{4}).*?\$ ?([\d\.,]+)", texto, flags=re.DOTALL)
-    monto = vto.group(2).replace(".", "").replace(",", "") if vto else "No encontrado"
+    nombre = (
+        extraer_nombre_alumno(texto)
+        or "No encontrado"
+    )
 
-    cuit_match = re.search(r"CUIT:\s*(\d{2})-(\d{8})-(\d{1})", texto)
-    cuit = "".join(cuit_match.groups()) if cuit_match else "No encontrado"
+    vto = re.search(
+        r"Vto:\s*(\d{2}/\d{2}/\d{4})"
+        r".*?\$ ?([\d\.,]+)",
+        texto,
+        flags=re.DOTALL
+    )
+
+    monto = (
+        vto.group(2)
+        .replace(".", "")
+        .replace(",", "")
+        if vto
+        else "No encontrado"
+    )
+
+    cuit_match = re.search(
+        r"CUIT:\s*(\d{2})-(\d{8})-(\d{1})",
+        texto
+    )
+
+    cuit = (
+        "".join(cuit_match.groups())
+        if cuit_match
+        else "No encontrado"
+    )
 
     return {
         "tipo": "Factura Colegio",
-        "fecha_emision": fecha.group(1) if fecha else "No encontrada",
+        "nombre": nombre,
+        "fecha_emision": (
+            fecha.group(1)
+            if fecha
+            else "No encontrada"
+        ),
         "numero": numero,
         "monto": monto,
         "cuit": cuit,
@@ -98,107 +238,254 @@ def extraer_datos_tipo1(texto: str) -> FacturaResult:
 
 
 def extraer_datos_tipo2(texto: str) -> FacturaResult:
-    """Factura de luz (tipo 2)"""
-    lsp = re.search(r"LSP B (\d{4})-(\d+)", texto)
-    total = re.search(r"TOTAL A PAGAR \(1° vencimiento\)\s*\$ ?([\d\.,]+)", texto)
-    fecha = re.search(r"Capital Federal\s+(\d{2}/\d{2}/\d{4})", texto)
+    """
+    Factura de luz.
+    """
+    lsp = re.search(
+        r"LSP B (\d{4})-(\d+)",
+        texto
+    )
 
-    nro = f"{lsp.group(1).zfill(5)}-{lsp.group(2)}" if lsp else "No encontrada"
-    monto = total.group(1).replace(".", "").replace(",", "") if total else "No encontrado"
+    total = re.search(
+        r"TOTAL A PAGAR \(1° vencimiento\)"
+        r"\s*\$ ?([\d\.,]+)",
+        texto
+    )
+
+    fecha = re.search(
+        r"Capital Federal\s+(\d{2}/\d{2}/\d{4})",
+        texto
+    )
+
+    nro = (
+        normalizar_numero_factura(
+            lsp.group(1),
+            lsp.group(2)
+        )
+        if lsp
+        else "No encontrada"
+    )
+
+    monto = (
+        total.group(1)
+        .replace(".", "")
+        .replace(",", "")
+        if total
+        else "No encontrado"
+    )
+
     cuit = "30655116512"
 
     return {
         "tipo": "Factura Luz",
-        "fecha_emision": fecha.group(1) if fecha else "No encontrada",
+        "fecha_emision": (
+            fecha.group(1)
+            if fecha
+            else "No encontrada"
+        ),
         "numero": nro,
         "monto": monto,
         "cuit": cuit,
     }
 
 
-def extraer_datos_tipo3(doc: fitz.Document) -> FacturaResult:
+def extraer_datos_tipo3(
+    doc: fitz.Document
+) -> FacturaResult:
     """
-    Factura del jardín (tipo 3) con OCR por recortes.
-    Depurado para Pylance: get_text("text") + cast(str, ...).
+    Factura del jardín con OCR por recortes.
     """
     texto: str = ""
     pagina_objetivo: Optional[fitz.Page] = None
 
-    # 1) Buscar página con "original" (case-insensitive)
-    for p_any in doc:
-        pagina = cast(fitz.Page, p_any)
-        t = cast(str, pagina.get_text("text"))
-        if re.search(r"\boriginal\b", t, flags=re.IGNORECASE):
-            texto = t
+    # Buscar página que contenga "Original".
+    for pagina_any in doc:
+        pagina = cast(fitz.Page, pagina_any)
+        texto_pagina = cast(
+            str,
+            pagina.get_text("text")
+        )
+
+        if re.search(
+            r"\boriginal\b",
+            texto_pagina,
+            flags=re.IGNORECASE
+        ):
+            texto = texto_pagina
             pagina_objetivo = pagina
             break
 
-    # 2) Fallback: buscar por marcador del jardín
+    # Fallback: buscar por nombre del jardín.
     if pagina_objetivo is None:
-        for p_any in doc:
-            pagina = cast(fitz.Page, p_any)
-            t = cast(str, pagina.get_text("text"))
-            if "RECREANDO INFANCIAS" in t:
-                texto = t
+        for pagina_any in doc:
+            pagina = cast(fitz.Page, pagina_any)
+            texto_pagina = cast(
+                str,
+                pagina.get_text("text")
+            )
+
+            if "RECREANDO INFANCIAS" in texto_pagina:
+                texto = texto_pagina
                 pagina_objetivo = pagina
                 break
 
-    # 3) Fallback final
+    # Fallback final: utilizar la primera página.
     if pagina_objetivo is None:
         if len(doc) == 0:
-            raise ValueError("PDF vacío: no hay páginas para procesar (tipo 3).")
-        pagina_objetivo = cast(fitz.Page, doc[0])
-        texto = cast(str, pagina_objetivo.get_text("text"))
+            raise ValueError(
+                "PDF vacío: no hay páginas para procesar."
+            )
 
-    fechas = re.findall(r"\b\d{2}/\d{2}/\d{4}\b", texto)
-    fecha = fechas[0] if fechas else "No encontrada"
+        pagina_objetivo = cast(
+            fitz.Page,
+            doc[0]
+        )
 
-    numero = extraer_numero_factura_auto(texto) or "No encontrada"
+        texto = cast(
+            str,
+            pagina_objetivo.get_text("text")
+        )
 
-    # Render a imagen
+    fechas = re.findall(
+        r"\b\d{2}/\d{2}/\d{4}\b",
+        texto
+    )
+
+    fecha = (
+        fechas[0]
+        if fechas
+        else "No encontrada"
+    )
+
+    numero = (
+        extraer_numero_factura_auto(texto)
+        or "No encontrada"
+    )
+
+    # Renderiza la página como imagen.
     pix = pagina_objetivo.get_pixmap(dpi=300)
-    img_bytes = pix.tobytes("png")
-    img = Image.open(io.BytesIO(img_bytes))
+    imagen_bytes = pix.tobytes("png")
 
-    # OCR Monto
-    crop_box_monto = (2200, 1170, 2500, 1220)
-    monto = pytesseract.image_to_string(
-        img.crop(crop_box_monto),
-        config="--psm 6 -c tessedit_char_whitelist=0123456789,."
-    ).strip().replace(".", "").replace(",", "")
+    imagen = Image.open(
+        io.BytesIO(imagen_bytes)
+    )
 
-    # OCR CUIT
-    crop_box_cuit = (1320, 540, 1820, 590)
+    # OCR del monto.
+    crop_box_monto = (
+        2200,
+        1170,
+        2500,
+        1220
+    )
+
+    recorte_monto = imagen.crop(
+        crop_box_monto
+    )
+
+    monto_ocr = pytesseract.image_to_string(
+        recorte_monto,
+        config=(
+            "--psm 6 "
+            "-c tessedit_char_whitelist=0123456789,."
+        )
+    ).strip()
+
+    monto = (
+        monto_ocr
+        .replace(".", "")
+        .replace(",", "")
+    )
+
+    # OCR del CUIT.
+    crop_box_cuit = (
+        1320,
+        540,
+        1820,
+        590
+    )
+
+    recorte_cuit = imagen.crop(
+        crop_box_cuit
+    )
+
     cuit_ocr = pytesseract.image_to_string(
-        img.crop(crop_box_cuit),
-        config="--psm 6 -c tessedit_char_whitelist=0123456789"
+        recorte_cuit,
+        config=(
+            "--psm 6 "
+            "-c tessedit_char_whitelist=0123456789"
+        )
     ).strip()
 
     return {
         "tipo": "Factura Jardin",
         "fecha_emision": fecha,
         "numero": numero,
-        "monto": monto if monto else "No encontrado",
-        "cuit": cuit_ocr if cuit_ocr else "No encontrado",
+        "monto": (
+            monto
+            if monto
+            else "No encontrado"
+        ),
+        "cuit": (
+            cuit_ocr
+            if cuit_ocr
+            else "No encontrado"
+        ),
     }
 
 
 def extraer_datos_tipo4(texto: str) -> FacturaResult:
-    """Factura de instituto de inglés (tipo 4)"""
-    numero = extraer_numero_factura_auto(texto) or "No encontrado"
+    """
+    Factura de instituto de inglés.
+    """
+    numero = (
+        extraer_numero_factura_auto(texto)
+        or "No encontrado"
+    )
 
-    fecha = re.search(r"(\d{2}/\d{2}/\d{4})", texto)
-    fecha_emision = fecha.group(1) if fecha else "No encontrada"
+    fecha = re.search(
+        r"(\d{2}/\d{2}/\d{4})",
+        texto
+    )
 
-    imp_total = re.search(r"Importe Total:.*?\n([\d\.,]+)", texto)
+    fecha_emision = (
+        fecha.group(1)
+        if fecha
+        else "No encontrada"
+    )
+
+    imp_total = re.search(
+        r"Importe Total:.*?\n([\d\.,]+)",
+        texto
+    )
+
     if imp_total:
-        monto = imp_total.group(1).replace(".", "").replace(",", ".")
+        monto = (
+            imp_total.group(1)
+            .replace(".", "")
+            .replace(",", ".")
+        )
     else:
-        importes = re.findall(r"(\d{4,}\.\d{2})", texto)
-        monto = importes[-1] if importes else "No encontrado"
+        importes = re.findall(
+            r"(\d{4,}\.\d{2})",
+            texto
+        )
 
-    cuit_match = re.search(r"CUIT:\s*(\d{2})-(\d{8})-(\d{1})", texto)
-    cuit = "".join(cuit_match.groups()) if cuit_match else "No encontrado"
+        monto = (
+            importes[-1]
+            if importes
+            else "No encontrado"
+        )
+
+    cuit_match = re.search(
+        r"CUIT:\s*(\d{2})-(\d{8})-(\d{1})",
+        texto
+    )
+
+    cuit = (
+        "".join(cuit_match.groups())
+        if cuit_match
+        else "No encontrado"
+    )
 
     return {
         "tipo": "Factura Ingles",
@@ -209,31 +496,92 @@ def extraer_datos_tipo4(texto: str) -> FacturaResult:
     }
 
 
-def extraer_datos_tipo5(doc: fitz.Document) -> FacturaResult:
-    """Factura Telecom (tipo 5) SOLO página 2."""
+def extraer_datos_tipo5(
+    doc: fitz.Document
+) -> FacturaResult:
+    """
+    Factura Telecom.
+    Procesa solamente la página 2.
+    """
     if len(doc) < 2:
-        raise ValueError("Factura Telecom: esperaba al menos 2 páginas y el PDF tiene menos.")
+        raise ValueError(
+            "Factura Telecom: esperaba al menos "
+            "2 páginas y el PDF tiene menos."
+        )
 
-    pagina2 = cast(fitz.Page, doc[1])
-    texto = cast(str, pagina2.get_text("text"))
+    pagina2 = cast(
+        fitz.Page,
+        doc[1]
+    )
 
-    match_fecha = re.search(r"Fecha de Emisi[oó]n\s*:?\s*(\d{2}/\d{2}/\d{4})", texto)
-    fecha_emision = match_fecha.group(1) if match_fecha else "No encontrada"
+    texto = cast(
+        str,
+        pagina2.get_text("text")
+    )
 
-    match_vto = re.search(r"Fecha de Vencimiento\s*:?\s*(\d{2}/\d{2}/\d{4})", texto)
-    fecha_vencimiento = match_vto.group(1) if match_vto else "No encontrada"
+    match_fecha = re.search(
+        r"Fecha de Emisi[oó]n\s*:?\s*"
+        r"(\d{2}/\d{2}/\d{4})",
+        texto
+    )
 
-    numero_factura = extraer_numero_factura_auto(texto) or "No encontrado"
+    fecha_emision = (
+        match_fecha.group(1)
+        if match_fecha
+        else "No encontrada"
+    )
 
-    match_monto = re.search(r"TOTAL DE SERVICIOS DEL MES\s*\$ ?([\d\.]+,\d{2})", texto)
+    match_vto = re.search(
+        r"Fecha de Vencimiento\s*:?\s*"
+        r"(\d{2}/\d{2}/\d{4})",
+        texto
+    )
+
+    fecha_vencimiento = (
+        match_vto.group(1)
+        if match_vto
+        else "No encontrada"
+    )
+
+    numero_factura = (
+        extraer_numero_factura_auto(texto)
+        or "No encontrado"
+    )
+
+    match_monto = re.search(
+        r"TOTAL DE SERVICIOS DEL MES"
+        r"\s*\$ ?([\d\.]+,\d{2})",
+        texto
+    )
+
     if match_monto:
-        monto = match_monto.group(1).replace(".", "")
+        monto = (
+            match_monto.group(1)
+            .replace(".", "")
+        )
     else:
-        any_m = re.search(r"\$ ?([\d\.]+,\d{2})", texto)
-        monto = any_m.group(1).replace(".", "") if any_m else "No encontrado"
+        cualquier_monto = re.search(
+            r"\$ ?([\d\.]+,\d{2})",
+            texto
+        )
 
-    match_cuit = re.search(r"C\.?U\.?I\.?T\.?:?\s*([\d-]+)", texto)
-    cuit = match_cuit.group(1).replace("-", "") if match_cuit else "No encontrado"
+        monto = (
+            cualquier_monto.group(1)
+            .replace(".", "")
+            if cualquier_monto
+            else "No encontrado"
+        )
+
+    match_cuit = re.search(
+        r"C\.?U\.?I\.?T\.?:?\s*([\d-]+)",
+        texto
+    )
+
+    cuit = (
+        match_cuit.group(1).replace("-", "")
+        if match_cuit
+        else "No encontrado"
+    )
 
     return {
         "tipo": "Factura Telecom",
@@ -246,29 +594,51 @@ def extraer_datos_tipo5(doc: fitz.Document) -> FacturaResult:
 
 
 # ----------------------------
-# Identificación de tipo
+# Identificación del tipo
 # ----------------------------
 def identificar_tipo(texto: str) -> int:
-    t = texto.lower()
+    """
+    Identifica el tipo de factura según palabras
+    y expresiones presentes en el documento.
+    """
+    texto_minusculas = texto.lower()
 
-    # Tipo 1: Colegio (incluye reinscripción)
-    if ("factura arancel" in t) or ("factura variable" in t) or ("factura reinscripci" in t) or ("colegio y oratorio san francisco de" in t):
+    # Tipo 1: Colegio.
+    if (
+        "factura arancel" in texto_minusculas
+        or "factura variable" in texto_minusculas
+        or "factura reinscripci" in texto_minusculas
+        or (
+            "colegio y oratorio san francisco de"
+            in texto_minusculas
+        )
+    ):
         return 1
 
-    # Tipo 2: Luz
-    if "liquidación de servicios públicos" in t:
+    # Tipo 2: Luz.
+    if (
+        "liquidación de servicios públicos"
+        in texto_minusculas
+    ):
         return 2
 
-    # Tipo 3: Jardín
-    if "recreando infancias" in t:
+    # Tipo 3: Jardín.
+    if "recreando infancias" in texto_minusculas:
         return 3
 
-    # Tipo 4: Inglés
-    if ("factura contado" in t) and ("sede central" in t):
+    # Tipo 4: Inglés.
+    if (
+        "factura contado" in texto_minusculas
+        and "sede central" in texto_minusculas
+    ):
         return 4
 
-    # Tipo 5: Telecom
-    if ("telecom argentina" in t) and ("total de servicios del mes" in t):
+    # Tipo 5: Telecom.
+    if (
+        "telecom argentina" in texto_minusculas
+        and "total de servicios del mes"
+        in texto_minusculas
+    ):
         return 5
 
     return 0
@@ -277,33 +647,60 @@ def identificar_tipo(texto: str) -> int:
 # ----------------------------
 # Procesamiento
 # ----------------------------
-def procesar_factura(path: Path) -> Optional[FacturaResult]:
+def procesar_factura(
+    path: Path
+) -> Optional[FacturaResult]:
+    """
+    Abre un PDF, identifica el tipo de factura
+    y ejecuta el extractor correspondiente.
+    """
     doc: Optional[fitz.Document] = None
+
     try:
         doc = fitz.open(path)
-        # Depurado: get_text("text") para que sea str seguro
+
         texto_completo = "\n".join(
-            cast(str, cast(fitz.Page, p).get_text("text"))
-            for p in doc
+            cast(
+                str,
+                cast(fitz.Page, pagina).get_text("text")
+            )
+            for pagina in doc
         )
 
         tipo = identificar_tipo(texto_completo)
 
         if tipo == 1:
-            return extraer_datos_tipo1(texto_completo)
+            return extraer_datos_tipo1(
+                texto_completo
+            )
+
         if tipo == 2:
-            return extraer_datos_tipo2(texto_completo)
+            return extraer_datos_tipo2(
+                texto_completo
+            )
+
         if tipo == 3:
             return extraer_datos_tipo3(doc)
+
         if tipo == 4:
-            return extraer_datos_tipo4(texto_completo)
+            return extraer_datos_tipo4(
+                texto_completo
+            )
+
         if tipo == 5:
             return extraer_datos_tipo5(doc)
 
+        print(
+            f"[AVISO] Tipo de factura no identificado: "
+            f"{path.name}"
+        )
+
         return None
 
-    except Exception as e:
-        print(f"[ERROR] {path.name}: {e}")
+    except Exception as error:
+        print(
+            f"[ERROR] {path.name}: {error}"
+        )
         return None
 
     finally:
@@ -311,46 +708,141 @@ def procesar_factura(path: Path) -> Optional[FacturaResult]:
             doc.close()
 
 
-def guardar_resultados_por_tipo(resultados: list[FacturaResult]) -> None:
+def guardar_resultados_por_tipo(
+    resultados: list[FacturaResult],
+    carpeta_salida: Path
+) -> None:
+    """
+    Agrupa los resultados por tipo y genera
+    un archivo TXT para cada uno.
+    """
     tipos: dict[str, list[FacturaResult]] = {}
 
-    for r in resultados:
-        tipo_key = r["tipo"].lower().replace(" ", "_")
-        tipos.setdefault(tipo_key, []).append(r)
+    for resultado in resultados:
+        tipo_key = (
+            resultado["tipo"]
+            .lower()
+            .replace(" ", "_")
+        )
+
+        tipos.setdefault(
+            tipo_key,
+            []
+        ).append(resultado)
 
     for tipo_key, registros in tipos.items():
-        nombre_archivo = f"facturas_{tipo_key}.txt"
-        with open(nombre_archivo, "w", encoding="utf-8") as f:
-            for r in registros:
-                f.write(f"Tipo: {r.get('tipo', 'No encontrado')}\n")
-                f.write(f"Fecha de emisión: {r.get('fecha_emision', 'No encontrada')}\n")
-                if "fecha_vencimiento" in r:
-                    f.write(f"Fecha de vencimiento: {r['fecha_vencimiento']}\n")
-                f.write(f"Número de factura: {r.get('numero', 'No encontrado')}\n")
-                f.write(f"Monto: ${r.get('monto', 'No encontrado')}\n")
-                f.write(f"CUIT: {r.get('cuit', 'No encontrado')}\n")
-                f.write("-" * 40 + "\n")
+        nombre_archivo = (
+            f"facturas_{tipo_key}.txt"
+        )
+
+        ruta_archivo = (
+            carpeta_salida / nombre_archivo
+        )
+
+        with open(
+            ruta_archivo,
+            "w",
+            encoding="utf-8"
+        ) as archivo:
+            for registro in registros:
+                archivo.write(
+                    f"Tipo: "
+                    f"{registro.get('tipo', 'No encontrado')}\n"
+                )
+
+                if "nombre" in registro:
+                    archivo.write(
+                        f"Alumno/a: "
+                        f"{registro.get('nombre', 'No encontrado')}\n"
+                    )
+
+                archivo.write(
+                    f"Fecha de emisión: "
+                    f"{registro.get('fecha_emision', 'No encontrada')}\n"
+                )
+
+                if "fecha_vencimiento" in registro:
+                    archivo.write(
+                        f"Fecha de vencimiento: "
+                        f"{registro['fecha_vencimiento']}\n"
+                    )
+
+                archivo.write(
+                    f"Número de factura: "
+                    f"{registro.get('numero', 'No encontrado')}\n"
+                )
+
+                archivo.write(
+                    f"Monto: $"
+                    f"{registro.get('monto', 'No encontrado')}\n"
+                )
+
+                archivo.write(
+                    f"CUIT: "
+                    f"{registro.get('cuit', 'No encontrado')}\n"
+                )
+
+                archivo.write(
+                    "-" * 40 + "\n"
+                )
 
 
 def seleccionar_carpeta_y_ejecutar() -> None:
-    carpeta = filedialog.askdirectory(title="Seleccioná la carpeta con los PDFs")
-    if not carpeta:
+    """
+    Abre el selector de carpetas, procesa los PDF
+    y guarda los resultados.
+    """
+    carpeta_seleccionada = filedialog.askdirectory(
+        title="Seleccioná la carpeta con los PDF"
+    )
+
+    if not carpeta_seleccionada:
         return
 
-    archivos = list(Path(carpeta).glob("*.pdf"))
+    carpeta = Path(carpeta_seleccionada)
+
+    archivos_pdf = sorted(
+        carpeta.glob("*.pdf")
+    )
+
+    if not archivos_pdf:
+        messagebox.showwarning(
+            "Sin archivos",
+            "No se encontraron archivos PDF "
+            "en la carpeta seleccionada."
+        )
+        return
 
     resultados: list[FacturaResult] = []
-    for pdf in archivos:
-        r = procesar_factura(pdf)
-        if r is not None:
-            resultados.append(r)
+
+    for archivo_pdf in archivos_pdf:
+        resultado = procesar_factura(
+            archivo_pdf
+        )
+
+        if resultado is not None:
+            resultados.append(resultado)
 
     if not resultados:
-        messagebox.showwarning("Sin resultados", "No pude extraer datos de ningún PDF en esa carpeta.")
+        messagebox.showwarning(
+            "Sin resultados",
+            "No pude extraer datos de ningún PDF "
+            "en esa carpeta."
+        )
         return
 
-    guardar_resultados_por_tipo(resultados)
-    messagebox.showinfo("¡Listo!", "Extracción completada.\nRevisá los archivos por tipo de factura.")
+    guardar_resultados_por_tipo(
+        resultados,
+        carpeta
+    )
+
+    messagebox.showinfo(
+        "¡Listo!",
+        "Extracción completada.\n\n"
+        "Los archivos TXT fueron guardados "
+        "en la misma carpeta que los PDF."
+    )
+
     ventana.destroy()
     sys.exit()
 
@@ -359,18 +851,45 @@ def seleccionar_carpeta_y_ejecutar() -> None:
 # GUI
 # ----------------------------
 ventana = tk.Tk()
-ventana.title("Extractor de Facturas PDF")
-ventana.geometry("420x200")
 
-label = tk.Label(ventana, text="Extrae fecha, número y monto de facturas", font=("Arial", 12))
-label.pack(pady=20)
+ventana.title(
+    "Extractor de Facturas PDF"
+)
+
+ventana.geometry(
+    "460x220"
+)
+
+ventana.resizable(
+    False,
+    False
+)
+
+label = tk.Label(
+    ventana,
+    text=(
+        "Extrae nombre, fecha, número, "
+        "monto y CUIT de las facturas"
+    ),
+    font=("Arial", 12),
+    wraplength=400
+)
+
+label.pack(
+    pady=25
+)
 
 boton = tk.Button(
     ventana,
     text="Seleccionar carpeta y procesar",
     command=seleccionar_carpeta_y_ejecutar,
-    font=("Arial", 12)
+    font=("Arial", 12),
+    padx=10,
+    pady=5
 )
-boton.pack(pady=10)
+
+boton.pack(
+    pady=10
+)
 
 ventana.mainloop()
