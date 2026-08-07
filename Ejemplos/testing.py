@@ -5,7 +5,7 @@ import tempfile
 import time
 
 
-DEB_FILENAME = "grass-desktop_7.6.0_amd64.deb"
+DEB_FILENAME = "Grass_6.1.2_amd64.deb"
 
 FTP_HOST = "10.254.125.162"
 FTP_DIR = "/Repositorio/img_routers/"
