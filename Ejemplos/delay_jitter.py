@@ -492,7 +492,7 @@ async function refresh() {
 }
 
 refresh();
-setInterval(refresh, 100);
+setInterval(refresh, 500);
 </script>
 </body>
 </html>
