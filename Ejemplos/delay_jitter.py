@@ -355,7 +355,8 @@ HTML = r"""
     <div class="subtitle">
         Destino: <strong>{{ target }}</strong> ({{ target_ip }}) |
         intervalo: {{ interval }} s |
-        ventana: {{ max_points }} muestras
+        ventana gráfica: {{ window_minutes }} min |
+        memoria: {{ max_points }} muestras
     </div>
 
     <div class="cards">
@@ -383,30 +384,35 @@ function formatElapsed(seconds) {
     return `${minutes}:${String(secs).padStart(2, "0")}`;
 }
 
-const commonOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    animation: false,
-    normalized: true,
-    parsing: false,
-    spanGaps: false,
-    scales: {
-        x: {
-            type: "linear",
-            min: 0,
-            max: WINDOW_SECONDS,
-            ticks: {
-                maxTicksLimit: 10,
-                callback: value => formatElapsed(value)
+function makeCommonOptions() {
+    // Devolvemos un objeto NUEVO para cada gráfico.
+    // No usamos structuredClone() porque este objeto contiene una función
+    // (el callback que formatea el eje X) y las funciones no son clonables.
+    return {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        normalized: true,
+        parsing: false,
+        spanGaps: false,
+        scales: {
+            x: {
+                type: "linear",
+                min: 0,
+                max: WINDOW_SECONDS,
+                ticks: {
+                    maxTicksLimit: 10,
+                    callback: value => formatElapsed(value)
+                },
+                title: { display: true, text: "Tiempo transcurrido (min:s)" }
             },
-            title: { display: true, text: "Tiempo transcurrido (min:s)" }
-        },
-        y: {
-            beginAtZero: true,
-            title: { display: true, text: "ms" }
+            y: {
+                beginAtZero: true,
+                title: { display: true, text: "ms" }
+            }
         }
-    }
-};
+    };
+}
 
 const latencyChart = new Chart(document.getElementById("latencyChart"), {
     type: "line",
@@ -418,7 +424,7 @@ const latencyChart = new Chart(document.getElementById("latencyChart"), {
             pointRadius: 1
         }]
     },
-    options: structuredClone(commonOptions)
+    options: makeCommonOptions()
 });
 
 const jitterChart = new Chart(document.getElementById("jitterChart"), {
@@ -431,7 +437,7 @@ const jitterChart = new Chart(document.getElementById("jitterChart"), {
             pointRadius: 1
         }]
     },
-    options: structuredClone(commonOptions)
+    options: makeCommonOptions()
 });
 
 function fmt(value) {
