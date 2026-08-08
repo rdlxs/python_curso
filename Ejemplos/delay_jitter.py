@@ -36,6 +36,7 @@ TARGET_IP = ""
 INTERVAL = 0.25
 TIMEOUT = 1.0
 MAX_POINTS = 600
+WINDOW_MINUTES = 30.0
 CSV_FILE = ""
 
 
@@ -372,6 +373,16 @@ HTML = r"""
 </div>
 
 <script>
+const SAMPLE_INTERVAL = {{ interval }};
+const WINDOW_SECONDS = {{ window_minutes }} * 60;
+
+function formatElapsed(seconds) {
+    const total = Math.max(0, Math.round(seconds));
+    const minutes = Math.floor(total / 60);
+    const secs = total % 60;
+    return `${minutes}:${String(secs).padStart(2, "0")}`;
+}
+
 const commonOptions = {
     responsive: true,
     maintainAspectRatio: false,
@@ -382,8 +393,13 @@ const commonOptions = {
     scales: {
         x: {
             type: "linear",
-            ticks: { maxTicksLimit: 12 },
-            title: { display: true, text: "Muestra" }
+            min: 0,
+            max: WINDOW_SECONDS,
+            ticks: {
+                maxTicksLimit: 10,
+                callback: value => formatElapsed(value)
+            },
+            title: { display: true, text: "Tiempo transcurrido (min:s)" }
         },
         y: {
             beginAtZero: true,
@@ -431,14 +447,30 @@ async function refresh() {
 
         // Incluimos null en los timeouts para que el gráfico muestre un hueco.
         latencyChart.data.datasets[0].data = payload.samples.map(item => ({
-            x: item.seq,
+            x: (item.seq - 1) * SAMPLE_INTERVAL,
             y: item.rtt_ms
         }));
 
         jitterChart.data.datasets[0].data = payload.samples.map(item => ({
-            x: item.seq,
+            x: (item.seq - 1) * SAMPLE_INTERVAL,
             y: item.jitter_ms
         }));
+
+        // El eje X siempre representa una ventana REAL de WINDOW_SECONDS.
+        // Durante la primera ventana el gráfico se llena de izquierda a derecha.
+        // Después comienza a desplazarse manteniendo esa duración visible.
+        let latestX = 0;
+        if (payload.samples.length > 0) {
+            latestX = (payload.samples[payload.samples.length - 1].seq - 1) * SAMPLE_INTERVAL;
+        }
+
+        const xMin = Math.max(0, latestX - WINDOW_SECONDS);
+        const xMax = latestX < WINDOW_SECONDS ? WINDOW_SECONDS : latestX;
+
+        latencyChart.options.scales.x.min = xMin;
+        latencyChart.options.scales.x.max = xMax;
+        jitterChart.options.scales.x.min = xMin;
+        jitterChart.options.scales.x.max = xMax;
 
         latencyChart.update("none");
         jitterChart.update("none");
@@ -460,7 +492,7 @@ async function refresh() {
 }
 
 refresh();
-setInterval(refresh, 3000);
+setInterval(refresh, 500);
 </script>
 </body>
 </html>
@@ -475,6 +507,7 @@ def index():
         target_ip=TARGET_IP,
         interval=INTERVAL,
         max_points=MAX_POINTS,
+        window_minutes=WINDOW_MINUTES,
     )
 
 
@@ -502,7 +535,7 @@ def create_csv():
 
 
 def main():
-    global TARGET, TARGET_IP, INTERVAL, TIMEOUT, MAX_POINTS, CSV_FILE
+    global TARGET, TARGET_IP, INTERVAL, TIMEOUT, MAX_POINTS, WINDOW_MINUTES, CSV_FILE
 
     parser = argparse.ArgumentParser(
         description="Monitor preciso de latencia y jitter ICMP hacia una ONT."
@@ -527,6 +560,12 @@ def main():
         help="Muestras visibles en la web. Default: 600",
     )
     parser.add_argument(
+        "--window-minutes",
+        type=float,
+        default=30.0,
+        help="Duración temporal visible del gráfico en minutos. Default: 30",
+    )
+    parser.add_argument(
         "--port",
         type=int,
         default=5000,
@@ -541,12 +580,19 @@ def main():
         parser.error("--timeout debe ser mayor que 0")
     if args.points < 10:
         parser.error("--points debe ser al menos 10")
+    if args.window_minutes <= 0:
+        parser.error("--window-minutes debe ser mayor que 0")
 
     TARGET = args.target
     TARGET_IP = socket.gethostbyname(TARGET)
     INTERVAL = args.interval
     TIMEOUT = args.timeout
-    MAX_POINTS = args.points
+    WINDOW_MINUTES = args.window_minutes
+
+    # Conservamos suficientes muestras en memoria para cubrir toda la ventana
+    # temporal elegida, aunque --points tenga un valor menor.
+    required_points = int((WINDOW_MINUTES * 60) / INTERVAL) + 10
+    MAX_POINTS = max(args.points, required_points)
 
     stop_event.clear()
     with samples_lock:
@@ -564,6 +610,7 @@ def main():
     print("=" * 70)
     print(f"Destino       : {TARGET} ({TARGET_IP})")
     print(f"Intervalo     : {INTERVAL} s")
+    print(f"Ventana gráfica: {WINDOW_MINUTES} min")
     print(f"Timeout       : {TIMEOUT} s")
     print(f"CSV           : {CSV_FILE}")
     print(f"Dashboard     : http://127.0.0.1:{args.port}")
