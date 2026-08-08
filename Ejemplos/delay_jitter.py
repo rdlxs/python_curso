@@ -460,7 +460,7 @@ async function refresh() {
 }
 
 refresh();
-setInterval(refresh, 500);
+setInterval(refresh, 3000);
 </script>
 </body>
 </html>
