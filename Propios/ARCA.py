@@ -16,8 +16,18 @@ CAMPOS = [
 ]
 
 # Campos visibles en la GUI.
-# "Mes" se muestra también en el panel derecho y se puede copiar con doble click.
-CAMPOS_GUI = ["Mes", *CAMPOS]
+# El número de factura se muestra dividido en dos campos independientes para poder
+# copiar por separado el punto de venta y el número de comprobante.
+CAMPOS_GUI = [
+    "Mes",
+    "Tipo",
+    "Alumno/a",
+    "Fecha de emisión",
+    "Punto de venta",
+    "Número de comprobante",
+    "Monto",
+    "CUIT",
+]
 
 MESES = {
     1: "Enero",
@@ -154,6 +164,23 @@ def extraer_numero_factura(texto: str) -> str:
     return normalizar_numero_factura(match.group(1))
 
 
+def dividir_numero_factura(numero: str) -> tuple[str, str]:
+    """
+    Separa el número normalizado en los dos valores que suelen pedir
+    los formularios web.
+
+    Ejemplo:
+        00002-00316154
+        -> punto de venta:       00002
+        -> número comprobante:   00316154
+    """
+    if numero == "NO ENCONTRADO" or "-" not in numero:
+        return "NO ENCONTRADO", "NO ENCONTRADO"
+
+    punto_venta, comprobante = numero.split("-", 1)
+    return punto_venta, comprobante
+
+
 def extraer_cuit(texto: str) -> str:
     # Extraemos CUIT/CUIL y devolvemos solamente los 11 dígitos, sin guiones.
     match = re.search(r"CUIT\s*:\s*(\d{2})-(\d{8})-(\d)", texto, re.I)
@@ -250,12 +277,22 @@ def parsear_factura(pdf_path: Path) -> dict:
     texto = normalizar_texto(extraer_texto_pdf(pdf_path))
     fecha_emision = extraer_fecha(texto)
 
+    numero_factura = extraer_numero_factura(texto)
+    punto_venta, numero_comprobante = dividir_numero_factura(numero_factura)
+
     return {
         "Mes": extraer_mes_factura(texto, fecha_emision),
         "Tipo": extraer_tipo(texto),
         "Alumno/a": extraer_alumno(texto),
         "Fecha de emisión": fecha_emision,
-        "Número de factura": extraer_numero_factura(texto),
+
+        # Se conserva el valor completo para el TXT.
+        "Número de factura": numero_factura,
+
+        # La GUI utiliza estos dos valores por separado.
+        "Punto de venta": punto_venta,
+        "Número de comprobante": numero_comprobante,
+
         "Monto": extraer_monto(texto),
         "CUIT": extraer_cuit(texto),
     }
@@ -286,7 +323,7 @@ def copiar_valor(event, root: tk.Tk, status_var: tk.StringVar):
 def mostrar_gui(resultados: list[dict], txt_generado: Path) -> None:
     root = tk.Tk()
     root.title("Extractor de facturas")
-    root.geometry("920x500")
+    root.geometry("940x540")
 
     main = ttk.Frame(root, padding=12)
     main.pack(fill="both", expand=True)
@@ -380,7 +417,7 @@ def mostrar_gui(resultados: list[dict], txt_generado: Path) -> None:
 
     ttk.Label(
         derecha,
-        text="Doble click sobre cualquier valor para copiarlo completo al portapapeles.",
+        text="Doble click sobre cualquier valor para copiarlo. Las dos partes de la factura se copian por separado.",
     ).grid(
         row=len(CAMPOS_GUI),
         column=0,
