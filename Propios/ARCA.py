@@ -286,7 +286,7 @@ def copiar_valor(event, root: tk.Tk, status_var: tk.StringVar):
 def mostrar_gui(resultados: list[dict], txt_generado: Path) -> None:
     root = tk.Tk()
     root.title("Extractor de facturas")
-    root.geometry("860x470")
+    root.geometry("920x500")
 
     main = ttk.Frame(root, padding=12)
     main.pack(fill="both", expand=True)
@@ -297,12 +297,55 @@ def mostrar_gui(resultados: list[dict], txt_generado: Path) -> None:
     derecha = ttk.Frame(main)
     derecha.pack(side="left", fill="both", expand=True)
 
-    ttk.Label(izquierda, text="Mes de la factura").pack(anchor="w")
-    lista = tk.Listbox(izquierda, width=38, height=16)
-    lista.pack(fill="y", expand=True, pady=(6, 0))
+    # En lugar de una Listbox plana usamos un Treeview.
+    # De esta forma cada alumno aparece como grupo y debajo quedan sus facturas,
+    # identificadas por el mes correspondiente.
+    ttk.Label(izquierda, text="Facturas por alumno").pack(anchor="w")
 
-    for factura in resultados:
-        lista.insert(tk.END, factura["Mes"])
+    tree_frame = ttk.Frame(izquierda)
+    tree_frame.pack(fill="both", expand=True, pady=(6, 0))
+
+    arbol = ttk.Treeview(
+        tree_frame,
+        show="tree",
+        selectmode="browse",
+        height=18,
+    )
+    arbol.pack(side="left", fill="both", expand=True)
+
+    scrollbar = ttk.Scrollbar(
+        tree_frame,
+        orient="vertical",
+        command=arbol.yview,
+    )
+    scrollbar.pack(side="right", fill="y")
+    arbol.configure(yscrollcommand=scrollbar.set)
+
+    # Relaciona cada fila-hija del Treeview con la factura correspondiente.
+    # Los nodos padre (alumnos) no apuntan a una factura concreta.
+    factura_por_item: dict[str, int] = {}
+    alumno_a_item: dict[str, str] = {}
+
+    for indice, factura in enumerate(resultados):
+        alumno = factura["Alumno/a"]
+
+        if alumno not in alumno_a_item:
+            item_alumno = arbol.insert(
+                "",
+                tk.END,
+                text=alumno,
+                open=True,
+            )
+            alumno_a_item[alumno] = item_alumno
+        else:
+            item_alumno = alumno_a_item[alumno]
+
+        item_factura = arbol.insert(
+            item_alumno,
+            tk.END,
+            text=factura["Mes"],
+        )
+        factura_por_item[item_factura] = indice
 
     status_var = tk.StringVar(value=f"TXT generado: {txt_generado.name}")
     status = ttk.Label(root, textvariable=status_var, anchor="w")
@@ -310,10 +353,27 @@ def mostrar_gui(resultados: list[dict], txt_generado: Path) -> None:
 
     entries = {}
     for fila, campo in enumerate(CAMPOS_GUI):
-        ttk.Label(derecha, text=campo + ":").grid(row=fila, column=0, sticky="w", pady=7)
+        ttk.Label(derecha, text=campo + ":").grid(
+            row=fila,
+            column=0,
+            sticky="w",
+            pady=7,
+        )
+
         entry = ttk.Entry(derecha, width=65)
-        entry.grid(row=fila, column=1, sticky="ew", padx=(10, 0), pady=7)
-        entry.bind("<Double-Button-1>", lambda e: copiar_valor(e, root, status_var))
+        entry.grid(
+            row=fila,
+            column=1,
+            sticky="ew",
+            padx=(10, 0),
+            pady=7,
+        )
+
+        entry.bind(
+            "<Double-Button-1>",
+            lambda e: copiar_valor(e, root, status_var),
+        )
+
         entries[campo] = entry
 
     derecha.columnconfigure(1, weight=1)
@@ -321,24 +381,47 @@ def mostrar_gui(resultados: list[dict], txt_generado: Path) -> None:
     ttk.Label(
         derecha,
         text="Doble click sobre cualquier valor para copiarlo completo al portapapeles.",
-    ).grid(row=len(CAMPOS_GUI), column=0, columnspan=2, sticky="w", pady=(18, 0))
+    ).grid(
+        row=len(CAMPOS_GUI),
+        column=0,
+        columnspan=2,
+        sticky="w",
+        pady=(18, 0),
+    )
 
     def cargar_factura(event=None):
-        seleccion = lista.curselection()
+        seleccion = arbol.selection()
         if not seleccion:
             return
-        factura = resultados[seleccion[0]]
+
+        item_seleccionado = seleccion[0]
+
+        # Si se seleccionó el nombre del alumno no cargamos nada:
+        # solamente los hijos representan facturas individuales.
+        indice = factura_por_item.get(item_seleccionado)
+        if indice is None:
+            return
+
+        factura = resultados[indice]
+
         for campo, entry in entries.items():
             entry.config(state="normal")
             entry.delete(0, tk.END)
             entry.insert(0, factura[campo])
             entry.config(state="readonly")
 
-    lista.bind("<<ListboxSelect>>", cargar_factura)
+    arbol.bind("<<TreeviewSelect>>", cargar_factura)
 
-    if resultados:
-        lista.selection_set(0)
-        cargar_factura()
+    # Seleccionamos automáticamente la primera factura disponible.
+    for item_alumno in arbol.get_children():
+        facturas_alumno = arbol.get_children(item_alumno)
+        if facturas_alumno:
+            primera_factura = facturas_alumno[0]
+            arbol.selection_set(primera_factura)
+            arbol.focus(primera_factura)
+            arbol.see(primera_factura)
+            cargar_factura()
+            break
 
     root.mainloop()
 
