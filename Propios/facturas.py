@@ -3,23 +3,15 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional, TypedDict, NotRequired, cast
 
-import fitz  # PyMuPDF
+import pymupdf  # PyMuPDF
 import re
 import tkinter as tk
 from tkinter import filedialog, messagebox
-from PIL import Image
 import io
 import sys
-import pytesseract
 
 
-# ----------------------------
-# Configuración de Tesseract
-# ----------------------------
-# Modificar esta ruta si Tesseract está instalado en otra ubicación.
-pytesseract.pytesseract.tesseract_cmd = (
-    r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-)
+
 
 
 # ----------------------------
@@ -290,17 +282,17 @@ def extraer_datos_tipo2(texto: str) -> FacturaResult:
 
 
 def extraer_datos_tipo3(
-    doc: fitz.Document
+    doc: pymupdf.Document
 ) -> FacturaResult:
     """
     Factura del jardín con OCR por recortes.
     """
     texto: str = ""
-    pagina_objetivo: Optional[fitz.Page] = None
+    pagina_objetivo: Optional[pymupdf.Page] = None
 
     # Buscar página que contenga "Original".
     for pagina_any in doc:
-        pagina = cast(fitz.Page, pagina_any)
+        pagina = cast(pymupdf.Page, pagina_any)
         texto_pagina = cast(
             str,
             pagina.get_text("text")
@@ -318,7 +310,7 @@ def extraer_datos_tipo3(
     # Fallback: buscar por nombre del jardín.
     if pagina_objetivo is None:
         for pagina_any in doc:
-            pagina = cast(fitz.Page, pagina_any)
+            pagina = cast(pymupdf.Page, pagina_any)
             texto_pagina = cast(
                 str,
                 pagina.get_text("text")
@@ -337,7 +329,7 @@ def extraer_datos_tipo3(
             )
 
         pagina_objetivo = cast(
-            fitz.Page,
+            pymupdf.Page,
             doc[0]
         )
 
@@ -361,60 +353,6 @@ def extraer_datos_tipo3(
         extraer_numero_factura_auto(texto)
         or "No encontrada"
     )
-
-    # Renderiza la página como imagen.
-    pix = pagina_objetivo.get_pixmap(dpi=300)
-    imagen_bytes = pix.tobytes("png")
-
-    imagen = Image.open(
-        io.BytesIO(imagen_bytes)
-    )
-
-    # OCR del monto.
-    crop_box_monto = (
-        2200,
-        1170,
-        2500,
-        1220
-    )
-
-    recorte_monto = imagen.crop(
-        crop_box_monto
-    )
-
-    monto_ocr = pytesseract.image_to_string(
-        recorte_monto,
-        config=(
-            "--psm 6 "
-            "-c tessedit_char_whitelist=0123456789,."
-        )
-    ).strip()
-
-    monto = (
-        monto_ocr
-        .replace(".", "")
-        .replace(",", "")
-    )
-
-    # OCR del CUIT.
-    crop_box_cuit = (
-        1320,
-        540,
-        1820,
-        590
-    )
-
-    recorte_cuit = imagen.crop(
-        crop_box_cuit
-    )
-
-    cuit_ocr = pytesseract.image_to_string(
-        recorte_cuit,
-        config=(
-            "--psm 6 "
-            "-c tessedit_char_whitelist=0123456789"
-        )
-    ).strip()
 
     return {
         "tipo": "Factura Jardin",
@@ -497,7 +435,7 @@ def extraer_datos_tipo4(texto: str) -> FacturaResult:
 
 
 def extraer_datos_tipo5(
-    doc: fitz.Document
+    doc: pymupdf.Document
 ) -> FacturaResult:
     """
     Factura Telecom.
@@ -510,7 +448,7 @@ def extraer_datos_tipo5(
         )
 
     pagina2 = cast(
-        fitz.Page,
+        pymupdf.Page,
         doc[1]
     )
 
@@ -654,15 +592,15 @@ def procesar_factura(
     Abre un PDF, identifica el tipo de factura
     y ejecuta el extractor correspondiente.
     """
-    doc: Optional[fitz.Document] = None
+    doc: Optional[pymupdf.Document] = None
 
     try:
-        doc = fitz.open(path)
+        doc = pymupdf.open(path)
 
         texto_completo = "\n".join(
             cast(
                 str,
-                cast(fitz.Page, pagina).get_text("text")
+                cast(pymupdf.Page, pagina).get_text("text")
             )
             for pagina in doc
         )
