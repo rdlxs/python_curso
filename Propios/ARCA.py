@@ -15,6 +15,29 @@ CAMPOS = [
     "CUIT",
 ]
 
+# Campos visibles en la GUI.
+# "Mes" se muestra también en el panel derecho y se puede copiar con doble click.
+CAMPOS_GUI = ["Mes", *CAMPOS]
+
+MESES = {
+    1: "Enero",
+    2: "Febrero",
+    3: "Marzo",
+    4: "Abril",
+    5: "Mayo",
+    6: "Junio",
+    7: "Julio",
+    8: "Agosto",
+    9: "Septiembre",
+    10: "Octubre",
+    11: "Noviembre",
+    12: "Diciembre",
+}
+
+MESES_POR_NOMBRE = {nombre.lower(): numero for numero, nombre in MESES.items()}
+# Aceptamos también la variante "setiembre", que aparece en algunos comprobantes.
+MESES_POR_NOMBRE["setiembre"] = 9
+
 
 def extraer_texto_pdf(pdf_path: Path) -> str:
     """Extrae el texto de todas las páginas de un PDF con PyMuPDF."""
@@ -56,6 +79,45 @@ def extraer_fecha(texto: str) -> str:
     # Como fallback, buscamos la primera fecha en la zona superior del documento.
     match = re.search(r"\b(\d{2}/\d{2}/\d{4})\b", texto[:1800])
     return match.group(1) if match else "NO ENCONTRADO"
+
+
+def extraer_mes_factura(texto: str, fecha_emision: str) -> str:
+    """
+    Obtiene el mes al que corresponde la factura.
+
+    Prioridad:
+      1. Período explícito del comprobante, por ejemplo "MES DE MARZO DE 2026".
+      2. Texto de pago, por ejemplo "PAGO MES DE Septiembre".
+      3. Campo numérico "Mes: 9", si está presente de forma directa.
+      4. Como fallback, usa el mes de la fecha de emisión.
+    """
+    nombre_mes = r"([A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+)"
+
+    patrones_nombre = [
+        rf"\bMES\s+DE\s+{nombre_mes}\s+DE\s+\d{{4}}\b",
+        rf"\bPAGO\s+MES\s+DE\s+{nombre_mes}\b",
+    ]
+
+    for patron in patrones_nombre:
+        match = re.search(patron, texto, re.I)
+        if match:
+            mes_texto = match.group(1).lower()
+            numero_mes = MESES_POR_NOMBRE.get(mes_texto)
+            if numero_mes:
+                return MESES[numero_mes]
+
+    # Algunos comprobantes muestran el período como un número.
+    match = re.search(r"(?mi)^Mes\s*:\s*(0?[1-9]|1[0-2])\s*$", texto)
+    if match:
+        return MESES[int(match.group(1))]
+
+    # Fallback: si el comprobante no declara otro período, tomamos el mes de emisión.
+    match = re.fullmatch(r"\d{2}/(\d{2})/\d{4}", fecha_emision)
+    if match:
+        numero_mes = int(match.group(1))
+        return MESES.get(numero_mes, "NO ENCONTRADO")
+
+    return "NO ENCONTRADO"
 
 
 def normalizar_numero_factura(numero: str) -> str:
@@ -186,11 +248,13 @@ def extraer_monto(texto: str) -> str:
 
 def parsear_factura(pdf_path: Path) -> dict:
     texto = normalizar_texto(extraer_texto_pdf(pdf_path))
+    fecha_emision = extraer_fecha(texto)
+
     return {
-        "Archivo": pdf_path.name,
+        "Mes": extraer_mes_factura(texto, fecha_emision),
         "Tipo": extraer_tipo(texto),
         "Alumno/a": extraer_alumno(texto),
-        "Fecha de emisión": extraer_fecha(texto),
+        "Fecha de emisión": fecha_emision,
         "Número de factura": extraer_numero_factura(texto),
         "Monto": extraer_monto(texto),
         "CUIT": extraer_cuit(texto),
@@ -203,7 +267,7 @@ def guardar_txt(resultados: list[dict], salida: Path) -> None:
         for i, factura in enumerate(resultados, start=1):
             if i > 1:
                 f.write("\n" + "=" * 60 + "\n\n")
-            f.write(f"Archivo: {factura['Archivo']}\n")
+            f.write(f"Mes: {factura['Mes']}\n")
             for campo in CAMPOS:
                 f.write(f"{campo}: {factura[campo]}\n")
 
@@ -222,7 +286,7 @@ def copiar_valor(event, root: tk.Tk, status_var: tk.StringVar):
 def mostrar_gui(resultados: list[dict], txt_generado: Path) -> None:
     root = tk.Tk()
     root.title("Extractor de facturas")
-    root.geometry("860x420")
+    root.geometry("860x470")
 
     main = ttk.Frame(root, padding=12)
     main.pack(fill="both", expand=True)
@@ -233,19 +297,19 @@ def mostrar_gui(resultados: list[dict], txt_generado: Path) -> None:
     derecha = ttk.Frame(main)
     derecha.pack(side="left", fill="both", expand=True)
 
-    ttk.Label(izquierda, text="Facturas procesadas").pack(anchor="w")
+    ttk.Label(izquierda, text="Mes de la factura").pack(anchor="w")
     lista = tk.Listbox(izquierda, width=38, height=16)
     lista.pack(fill="y", expand=True, pady=(6, 0))
 
     for factura in resultados:
-        lista.insert(tk.END, factura["Archivo"])
+        lista.insert(tk.END, factura["Mes"])
 
     status_var = tk.StringVar(value=f"TXT generado: {txt_generado.name}")
     status = ttk.Label(root, textvariable=status_var, anchor="w")
     status.pack(fill="x", padx=12, pady=(0, 10))
 
     entries = {}
-    for fila, campo in enumerate(CAMPOS):
+    for fila, campo in enumerate(CAMPOS_GUI):
         ttk.Label(derecha, text=campo + ":").grid(row=fila, column=0, sticky="w", pady=7)
         entry = ttk.Entry(derecha, width=65)
         entry.grid(row=fila, column=1, sticky="ew", padx=(10, 0), pady=7)
@@ -257,7 +321,7 @@ def mostrar_gui(resultados: list[dict], txt_generado: Path) -> None:
     ttk.Label(
         derecha,
         text="Doble click sobre cualquier valor para copiarlo completo al portapapeles.",
-    ).grid(row=len(CAMPOS), column=0, columnspan=2, sticky="w", pady=(18, 0))
+    ).grid(row=len(CAMPOS_GUI), column=0, columnspan=2, sticky="w", pady=(18, 0))
 
     def cargar_factura(event=None):
         seleccion = lista.curselection()
