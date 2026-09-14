@@ -410,7 +410,7 @@ def main():
 
 
 if __name__ == "__main__":
-    if os.geteuid() != 0:
+    if os.getpid() != 0:
         print("⚠️ Este script debe ejecutarse como root utilizando sudo.")
         raise SystemExit(1)
 
