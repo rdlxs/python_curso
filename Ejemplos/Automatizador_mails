@@ -1,81 +1,212 @@
-"""Prueba de solo lectura: pip install caldav; python prueba_icloud_enanos.py"""
+"""Vista previa de Xhendra para Family Calendar. Solo lectura.
+Instalar: python -m pip install caldav
+Ejecutar: python vista_previa_enanos.py
+No guarda credenciales ni crea eventos. No envia mensajes a Telegram.
+"""
 import getpass
+import html
 import imaplib
 import logging
+import re
 import ssl
+import unicodedata
+from datetime import date
 from email import policy
 from email.parser import BytesParser
+from html.parser import HTMLParser
+
 import caldav
 
+CALENDARIO = 'Family Calendar'
+REMITENTE = 'sistema@xhendra.com.ar'
 logging.disable(logging.CRITICAL)
+MESES = {nombre: i for i, nombre in enumerate(
+    ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
+     'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'], 1)}
+DIAS = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo']
+# Reconoce fechas numericas y escritas, pero no pretende interpretar lenguaje libre.
+FECHA = re.compile(
+    r'(?<![\d/])(\d{1,2})(?:\s+y\s+(\d{1,2}))?/'
+    r'(\d{1,2})(?:/(\d{4}))?(?![\d/])|'
+    r'(?<!\d)(\d{1,2})\s+de\s+(' + '|'.join(MESES) + r')\b', re.I)
+HORA = re.compile(r'\b(?:[01]?\d|2[0-3]):[0-5]\d\b|\b(?:[01]?\d|2[0-3])\s*(?:hs|horas)\b', re.I)
 
 
-def probar_correo(usuario, clave):
-    # SSL cifra la conexion. readonly y BODY.PEEK no marcan correos leidos.
+def normalizar(texto):
+    return ''.join(c for c in unicodedata.normalize('NFD', texto.lower())
+                   if unicodedata.category(c) != 'Mn')
+
+
+class TextoHTML(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.partes = []
+        self.oculto = 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag in ('style', 'script'):
+            self.oculto += 1
+        if tag in ('p', 'div', 'br', 'li', 'tr') and not self.oculto:
+            self.partes.append('\n')
+
+    def handle_endtag(self, tag):
+        if tag in ('style', 'script'):
+            self.oculto = max(0, self.oculto - 1)
+        if tag in ('p', 'div', 'li', 'tr') and not self.oculto:
+            self.partes.append('\n')
+
+    def handle_data(self, data):
+        if not self.oculto:
+            self.partes.append(data)
+
+
+def texto_mensaje(mensaje):
+    cuerpo = mensaje.get_body(preferencelist=('plain', 'html'))
+    if cuerpo is None:
+        raise ValueError('El correo no tiene cuerpo de texto disponible')
+    texto = cuerpo.get_content()
+    if cuerpo.get_content_type() == 'text/html':
+        parser = TextoHTML()
+        parser.feed(texto)
+        texto = ''.join(parser.partes)
+    return html.unescape(texto).replace('\xa0', ' ')
+
+
+def leer_correo(usuario, clave):
     with imaplib.IMAP4_SSL('imap.mail.me.com', 993,
-                          ssl_context=ssl.create_default_context(), timeout=30) as correo:
-        correo.login(usuario, clave)
-        estado, _ = correo.select('INBOX', readonly=True)
+                          ssl_context=ssl.create_default_context(), timeout=30) as conexion:
+        conexion.login(usuario, clave)
+        estado, _ = conexion.select('INBOX', readonly=True)
         if estado != 'OK':
             raise RuntimeError('No se pudo abrir INBOX')
-        print('OK: acceso al correo.')
-        # Busca tambien el remitente original dentro de los reenvios.
-        # Son candidatos, no una verificacion de autenticidad del remitente.
-        estado, datos = correo.uid('search', None, 'TEXT', '"sistema@xhendra.com.ar"')
+        estado, datos = conexion.uid('search', None, 'TEXT', '"' + REMITENTE + '"')
         if estado != 'OK':
             raise RuntimeError('Fallo la busqueda')
-        ids = datos[0].split()
-        print('Mensajes candidatos en INBOX:', len(ids))
+        ids = datos[0].split()[-5:]
         if not ids:
-            print('Revisa tambien las otras carpetas y correo no deseado.')
-            return
-        estado, partes = correo.uid('fetch', ids[-1], '(BODY.PEEK[])')
-        if estado != 'OK':
-            raise RuntimeError('Fallo la lectura')
-        raw = next(p[1] for p in partes if isinstance(p, tuple))
-        mensaje = BytesParser(policy=policy.default).parsebytes(raw)
-        print('Asunto del ultimo candidato:', mensaje.get('Subject', 'Sin asunto'))
-        cuerpo = mensaje.get_body(preferencelist=('plain', 'html'))
-        if cuerpo is not None:
-            print('Cuerpo leido:', len(cuerpo.get_content()), 'caracteres.')
-        else:
-            print('No se encontro un cuerpo de texto. Revisar formato del reenvio.')
+            raise ValueError('No hay candidatos de Xhendra en INBOX')
+        mensajes = []
+        for uid in reversed(ids):
+            estado, partes = conexion.uid('fetch', uid, '(BODY.PEEK[])')
+            if estado != 'OK':
+                raise RuntimeError('Fallo la lectura')
+            raw = next(p[1] for p in partes if isinstance(p, tuple))
+            mensajes.append(BytesParser(policy=policy.default).parsebytes(raw))
+        print('\nUltimos candidatos (el remitente citado no verifica autenticidad):')
+        for numero, mensaje in enumerate(mensajes, 1):
+            print(f'{numero}. {mensaje.get("Subject", "Sin asunto")}')
+        seleccion = int(input('Numero de correo para revisar [1]: ').strip() or '1')
+        if not 1 <= seleccion <= len(mensajes):
+            raise ValueError('Seleccion fuera de rango')
+        return texto_mensaje(mensajes[seleccion - 1])
 
 
-def probar_calendarios(usuario, clave):
+def verificar_calendario(usuario, clave):
     cliente = caldav.DAVClient(url='https://caldav.icloud.com/',
                               username=usuario, password=clave, timeout=30)
     try:
-        calendarios = cliente.principal().calendars()
-        print('OK: acceso a calendario. Encontrados:', len(calendarios))
-        for numero, calendario in enumerate(calendarios, 1):
-            print(f'  {numero}. {calendario.get_display_name() or "(sin nombre)"}')
+        encontrados = [c for c in cliente.principal().calendars()
+                       if c.get_display_name() == CALENDARIO]
+        if len(encontrados) != 1:
+            raise ValueError('Debe existir exactamente un calendario Family Calendar')
+        print('\nDestino encontrado: Family Calendar (solo consulta).')
+        print('La lectura no comprueba todavia el permiso de escritura.')
     finally:
         cliente.close()
 
 
+def candidatos(texto, anio):
+    # Cada fragmento empieza en una linea con fecha y conserva las siguientes.
+    # No asociamos automaticamente varias horas a un unico evento.
+    bloques = []
+    actual = None
+    contexto = ''
+    for linea in texto.splitlines():
+        linea = linea.strip()
+        if not linea:
+            continue
+        plano = normalizar(linea)
+        if FECHA.search(plano):
+            if actual:
+                bloques.append(actual)
+            actual = {'linea': linea, 'texto': linea, 'contexto': contexto}
+        else:
+            if actual:
+                actual['texto'] += '\n' + linea
+            if re.search(r'reunion|inicio|ano proximo|ciclo', plano):
+                contexto = linea
+    if actual:
+        bloques.append(actual)
+    resultados = []
+    for bloque in bloques:
+        linea = normalizar(bloque['linea'])
+        anios = re.findall(r'\b20\d{2}\b', linea)
+        contexto_anios = re.findall(r'\b20\d{2}\b', bloque['contexto'])
+        elegido = int(anios[-1]) if anios else int(contexto_anios[-1]) if contexto_anios else anio
+        avisos = ['Revisar titulo, alcance y asociacion de horarios antes de cargar.']
+        if not anios:
+            avisos.append(f'Ano {elegido} tomado del contexto o del ano base ingresado.')
+        fechas = []
+        for match in FECHA.finditer(linea):
+            if match.group(5):
+                dias, mes, ano = [int(match.group(5))], MESES[match.group(6).lower()], elegido
+            else:
+                dias = [int(match.group(1))]
+                if match.group(2):
+                    dias.append(int(match.group(2)))
+                mes, ano = int(match.group(3)), int(match.group(4) or elegido)
+            for dia in dias:
+                try:
+                    fecha = date(ano, mes, dia)
+                    fechas.append(fecha.isoformat())
+                    escritos = [d for d in DIAS if re.search(r'\b' + d + r'\b', linea)]
+                    if escritos and DIAS[fecha.weekday()] not in escritos:
+                        avisos.append(f'CONTRADICCION: {fecha:%d/%m/%Y} es {DIAS[fecha.weekday()]}.')
+                except ValueError:
+                    avisos.append(f'FECHA INVALIDA: {dia}/{mes}/{ano}')
+        horas = list(dict.fromkeys(HORA.findall(bloque['texto'])))
+        if len(horas) > 1:
+            avisos.append('VARIAS HORAS: puede contener mas de un evento (por ejemplo retiro y acto).')
+        if not horas:
+            avisos.append('Sin hora detectada: no se inventa un horario.')
+        if re.search(r'\bsalas?\b|\bgrados?\b', normalizar(bloque['texto'])):
+            avisos.append('Revisar sala/grado: todavia no hay filtro familiar configurado.')
+        resultados.append((bloque, fechas, horas, avisos))
+    return resultados
+
+
 def main():
-    print('PRUEBA ICLOUD: solo lectura, sin envios ni cambios.\n')
-    mail = input('Correo iCloud (@icloud.com): ').strip()
-    apple = input('Correo de inicio de sesion Apple (Enter si es el mismo): ').strip() or mail
+    print('VISTA PREVIA PARA FAMILY CALENDAR. No crea eventos ni envia avisos.\n')
+    mail = input('Correo iCloud: ').strip()
+    apple = input('Cuenta Apple [Enter si coincide]: ').strip() or mail
     clave = getpass.getpass('Contrasena especifica para apps: ').strip()
     if not mail or not clave:
-        print('Faltan datos.')
-        return
-    for nombre, funcion, usuario in [('CORREO', probar_correo, mail),
-                                     ('CALENDARIO', probar_calendarios, apple)]:
-        print(f'\n--- {nombre} ---')
-        try:
-            funcion(usuario, clave)
-        except Exception as error:
-            # No imprimir el detalle completo: puede contener datos privados.
-            print(f'ERROR en {nombre}: {type(error).__name__}.')
-            print('Revisa usuario, contrasena especifica y conexion a Internet.')
-    clave = None
+        raise ValueError('Faltan credenciales')
+    verificar_calendario(apple, clave)
+    texto = leer_correo(mail, clave)
+    # El reenvio puede tener fecha distinta a la publicacion. No usamos ese ano a ciegas.
+    anio = int(input('Ano base del comunicado original (ejemplo: 2026): ').strip())
+    if not 2000 <= anio <= 2100:
+        raise ValueError('Ano fuera de rango')
+    resultados = candidatos(texto, anio)
+    print(f'\nFragmentos con fechas detectados: {len(resultados)}')
+    for numero, (bloque, fechas, horas, avisos) in enumerate(resultados, 1):
+        print(f'\n[{numero}] Fechas: {", ".join(fechas) or "Revisar"}')
+        print('Horas encontradas:', ', '.join(horas) or 'Ninguna')
+        print('Contexto:', bloque['contexto'] or '(sin encabezado)')
+        print('Texto original:\n' + bloque['texto'])
+        for aviso in avisos:
+            print('  - ' + aviso)
+    print('\nFIN: no se escribio en iCloud ni se envio nada a Telegram.')
+    print('Esta deteccion es preliminar: puede incluir fechas de encabezados o perder fechas relativas.')
 
 
 if __name__ == '__main__':
     try:
         main()
     except (KeyboardInterrupt, EOFError):
-        print('\nPrueba cancelada.')
+        print('\nCancelado.')
+    except Exception as error:
+        # No se imprimen respuestas de servidores que puedan contener datos privados.
+        print(f'No se pudo completar la prueba: {type(error).__name__}.')
+        print('Revisa credenciales, seleccion de correo, ano y conexion.')
