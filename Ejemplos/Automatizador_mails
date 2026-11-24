@@ -49,7 +49,7 @@ def probar_calendarios(usuario, clave):
         calendarios = cliente.principal().calendars()
         print('OK: acceso a calendario. Encontrados:', len(calendarios))
         for numero, calendario in enumerate(calendarios, 1):
-            print(f'  {numero}. {calendario.name or "(sin nombre)"}')
+            print(f'  {numero}. {calendario.get_display_name() or "(sin nombre)"}')
     finally:
         cliente.close()
 
