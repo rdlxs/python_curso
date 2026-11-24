@@ -176,7 +176,7 @@ def candidatos(texto, anio):
     for linea in limpiar_lineas(texto):
         plano = normalizar(linea)
         # Un encabezado nuevo termina el evento anterior, no se agrega a el.
-        proximo = 'ano proximo' in plano or 'proximo ano' in plano
+        proximo = 'año proximo' in plano or 'proximo año' in plano
         encabezado = bool(re.match(r'^[*\-\u2022. ]*(?:primera\s+)?reunion de familias', plano)
                           or re.match(r'^[*\-\u2022. ]*inicio de clases', plano))
         tiene_fecha = FECHA.search(plano)
@@ -217,25 +217,25 @@ def candidatos(texto, anio):
         if bloque.get('separado'):
             avisos.append('Actividad separada por su oracion y horario; validar el alcance.')
         if not anios:
-            avisos.append(f'Ano {elegido} inferido del ano base o de la seccion del comunicado.')
+            avisos.append(f'Año {elegido} inferido del año base o de la sección del comunicado.')
         fechas = []
         for match in FECHA.finditer(linea):
             if match.group(5):
-                dias, mes, ano = [int(match.group(5))], MESES[match.group(6).lower()], elegido
+                dias, mes, año = [int(match.group(5))], MESES[match.group(6).lower()], elegido
             else:
                 dias = [int(match.group(1))]
                 if match.group(2):
                     dias.append(int(match.group(2)))
-                mes, ano = int(match.group(3)), int(match.group(4) or elegido)
+                mes, año = int(match.group(3)), int(match.group(4) or elegido)
             for dia in dias:
                 try:
-                    fecha = date(ano, mes, dia)
+                    fecha = date(año, mes, dia)
                     fechas.append(fecha.isoformat())
                     escritos = [d for d in DIAS if re.search(r'\b' + d + r'\b', linea)]
                     if escritos and DIAS[fecha.weekday()] not in escritos:
                         avisos.append(f'CONTRADICCION: {fecha:%d/%m/%Y} es {DIAS[fecha.weekday()]}.')
                 except ValueError:
-                    avisos.append(f'FECHA INVALIDA: {dia}/{mes}/{ano}')
+                    avisos.append(f'FECHA INVALIDA: {dia}/{mes}/{año}')
         horas = list(dict.fromkeys(HORA.findall(bloque['texto'])))
         if len(horas) > 1:
             avisos.append('VARIAS HORAS SIN RESOLVER: no se elige una automaticamente.')
@@ -257,12 +257,12 @@ Asunto: FECHAS IMPORTANTES
 . 7 y 8/12 JUEVES Feriado.
 . 9/12 MIERCOLES 19:00 hs Acto escolar para salas de 5 anos 2026. Como todo el nivel participa, retirandose todas las salas luego del almuerzo 13:15 hs. Los ninos de salas de 5 regresan a las 19:00 hs.
 . 18/12 VIERNES Envio de informes.
-Anticipandonos para el ano proximo:
+Anticipandonos para el año proximo:
 * Primera Reunion de Familias, sin alumnos/as
-SALAS de 2 y 3 ANOS 2027 Miercoles 24/2 8:30 hs.
-SALAS de 4 y 5 ANOS 2027 Jueves 25/2 8:30 hs.
+SALAS de 2 y 3 AÑOS 2027 Miercoles 24/2 8:30 hs.
+SALAS de 4 y 5 AÑOS 2027 Jueves 25/2 8:30 hs.
 * Inicio de clases Ciclo 2027 1 de Marzo
-Que estos ultimos pasitos del ano nos encuentren unidos.
+Que estos ultimos pasitos del año nos encuentren unidos.
 Notificarme<https://example.invalid/?loginToken=SECRETO_DE_PRUEBA>
 Pie de correo 20/11/2026'''
     resultados = candidatos(muestra, 2026)
@@ -279,12 +279,12 @@ Pie de correo 20/11/2026'''
     assert 'Inicio de clases' in inicio[0]['contexto'], 'Contexto heredado incorrectamente'
     assert 'SECRETO_DE_PRUEBA' not in repr(resultados), 'Se filtro un token'
     assert 'SECRETO' not in ocultar_enlaces('https://example.invalid/?loginToken=SECRETO')
-    assert candidatos('Anticipandonos para el ano proximo:\n1/3 Inicio', 2026)[0][1] == ['2027-03-01']
+    assert candidatos('Anticipandonos para el año proximo:\n1/3 Inicio', 2026)[0][1] == ['2027-03-01']
     assert any('FECHA INVALIDA' in a for a in candidatos('31/2 Reunion', 2026)[0][3])
     parser = TextoHTML()
     parser.feed('<p>9/12 Salida 13:15</p><script>dato oculto</script>')
     assert 'dato oculto' not in ''.join(parser.partes)
-    print('OK: autoprueba de cabeceras, contexto, anos, horas, HTML y enlaces.')
+    print('OK: autoprueba de cabeceras, contexto, años, horas, HTML y enlaces.')
 
 
 def main():
@@ -296,11 +296,11 @@ def main():
         raise ValueError('Faltan credenciales')
     verificar_calendario(apple, clave)
     texto = leer_correo(mail, clave)
-    # El reenvio puede tener fecha distinta a la publicacion. No usamos ese ano a ciegas.
-    anio = int(input('Ano base del comunicado original (ejemplo: 2026): ').strip())
-    if not 2000 <= anio <= 2100:
-        raise ValueError('Ano fuera de rango')
-    resultados = candidatos(texto, anio)
+    # El reenvio puede tener fecha distinta a la publicacion. No usamos ese año a ciegas.
+    año = int(input('Año base del comunicado original (ejemplo: 2026): ').strip())
+    if not 2000 <= año <= 2100:
+        raise ValueError('ño fuera de rango')
+    resultados = candidatos(texto, año)
     print(f'\nCandidatos para revision: {len(resultados)}')
     for numero, (bloque, fechas, horas, avisos) in enumerate(resultados, 1):
         print(f'\n[{numero}] Fechas: {", ".join(fechas) or "Revisar"}')
@@ -327,6 +327,6 @@ if __name__ == '__main__':
             raise
         # No se imprimen respuestas de servidores que puedan contener datos privados.
         print(f'No se pudo completar la prueba: {type(error).__name__}.')
-        print('Revisa credenciales, seleccion de correo, ano y conexion.')
+        print('Revisa credenciales, seleccion de correo, año y conexion.')
 
 
