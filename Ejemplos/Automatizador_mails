@@ -1,0 +1,81 @@
+"""Prueba de solo lectura: pip install caldav; python prueba_icloud_enanos.py"""
+import getpass
+import imaplib
+import logging
+import ssl
+from email import policy
+from email.parser import BytesParser
+import caldav
+
+logging.disable(logging.CRITICAL)
+
+
+def probar_correo(usuario, clave):
+    # SSL cifra la conexion. readonly y BODY.PEEK no marcan correos leidos.
+    with imaplib.IMAP4_SSL('imap.mail.me.com', 993,
+                          ssl_context=ssl.create_default_context(), timeout=30) as correo:
+        correo.login(usuario, clave)
+        estado, _ = correo.select('INBOX', readonly=True)
+        if estado != 'OK':
+            raise RuntimeError('No se pudo abrir INBOX')
+        print('OK: acceso al correo.')
+        # Busca tambien el remitente original dentro de los reenvios.
+        # Son candidatos, no una verificacion de autenticidad del remitente.
+        estado, datos = correo.uid('search', None, 'TEXT', '"sistema@xhendra.com.ar"')
+        if estado != 'OK':
+            raise RuntimeError('Fallo la busqueda')
+        ids = datos[0].split()
+        print('Mensajes candidatos en INBOX:', len(ids))
+        if not ids:
+            print('Revisa tambien las otras carpetas y correo no deseado.')
+            return
+        estado, partes = correo.uid('fetch', ids[-1], '(BODY.PEEK[])')
+        if estado != 'OK':
+            raise RuntimeError('Fallo la lectura')
+        raw = next(p[1] for p in partes if isinstance(p, tuple))
+        mensaje = BytesParser(policy=policy.default).parsebytes(raw)
+        print('Asunto del ultimo candidato:', mensaje.get('Subject', 'Sin asunto'))
+        cuerpo = mensaje.get_body(preferencelist=('plain', 'html'))
+        if cuerpo is not None:
+            print('Cuerpo leido:', len(cuerpo.get_content()), 'caracteres.')
+        else:
+            print('No se encontro un cuerpo de texto. Revisar formato del reenvio.')
+
+
+def probar_calendarios(usuario, clave):
+    cliente = caldav.DAVClient(url='https://caldav.icloud.com/',
+                              username=usuario, password=clave, timeout=30)
+    try:
+        calendarios = cliente.principal().calendars()
+        print('OK: acceso a calendario. Encontrados:', len(calendarios))
+        for numero, calendario in enumerate(calendarios, 1):
+            print(f'  {numero}. {calendario.name or "(sin nombre)"}')
+    finally:
+        cliente.close()
+
+
+def main():
+    print('PRUEBA ICLOUD: solo lectura, sin envios ni cambios.\n')
+    mail = input('Correo iCloud (@icloud.com): ').strip()
+    apple = input('Correo de inicio de sesion Apple (Enter si es el mismo): ').strip() or mail
+    clave = getpass.getpass('Contrasena especifica para apps: ').strip()
+    if not mail or not clave:
+        print('Faltan datos.')
+        return
+    for nombre, funcion, usuario in [('CORREO', probar_correo, mail),
+                                     ('CALENDARIO', probar_calendarios, apple)]:
+        print(f'\n--- {nombre} ---')
+        try:
+            funcion(usuario, clave)
+        except Exception as error:
+            # No imprimir el detalle completo: puede contener datos privados.
+            print(f'ERROR en {nombre}: {type(error).__name__}.')
+            print('Revisa usuario, contrasena especifica y conexion a Internet.')
+    clave = None
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except (KeyboardInterrupt, EOFError):
+        print('\nPrueba cancelada.')

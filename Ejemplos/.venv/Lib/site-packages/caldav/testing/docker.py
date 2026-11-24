@@ -1,0 +1,590 @@
+"""
+Docker-based test server implementations.
+
+This module provides test server implementations for servers that run
+in Docker containers: Baikal, Nextcloud, Cyrus, SOGo, Bedework (5.x and 3.10.3),
+DAViCal, Davis, CCS, Zimbra, Stalwart and OX.
+"""
+
+import os
+from typing import Any
+from urllib.parse import quote
+
+from caldav import compatibility_hints
+from caldav.lib.http_sync import requests
+
+from .base import DEFAULT_HTTP_TIMEOUT, DockerTestServer
+from .registry import register_server_class
+
+
+class BaikalTestServer(DockerTestServer):
+    """
+    Baikal CalDAV server in Docker.
+
+    Baikal is a lightweight CalDAV/CardDAV server.
+    """
+
+    name = "Baikal"
+
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
+        config = config or {}
+        host = config.get("host") or os.environ.get("BAIKAL_HOST", "localhost")
+        port = int(config.get("port") or os.environ.get("BAIKAL_PORT", "8800"))
+        config.setdefault("host", host)
+        config.setdefault("port", port)
+        config.setdefault("username", os.environ.get("BAIKAL_USERNAME", "testuser"))
+        config.setdefault("password", os.environ.get("BAIKAL_PASSWORD", "testpass"))
+        # Set up Baikal-specific compatibility hints
+        if "features" not in config:
+            config["features"] = compatibility_hints.baikal.copy()
+        # user1-user3 are pre-seeded in the committed db.sqlite for scheduling tests
+        if "scheduling_users" not in config:
+            base = f"http://{host}:{port}/dav.php"
+            config["scheduling_users"] = [
+                {"url": base, "username": f"user{i}", "password": f"testpass{i}"}
+                for i in range(1, 4)
+            ]
+        super().__init__(config)
+
+    def _default_port(self) -> int:
+        return 8800
+
+    @property
+    def url(self) -> str:
+        return f"http://{self.host}:{self.port}/dav.php"
+
+
+class NextcloudTestServer(DockerTestServer):
+    """
+    Nextcloud CalDAV server in Docker.
+
+    Nextcloud is a self-hosted cloud platform with CalDAV support.
+    """
+
+    name = "Nextcloud"
+
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
+        config = config or {}
+        host = config.get("host") or os.environ.get("NEXTCLOUD_HOST", "localhost")
+        port = int(config.get("port") or os.environ.get("NEXTCLOUD_PORT", "8801"))
+        config.setdefault("host", host)
+        config.setdefault("port", port)
+        config.setdefault("username", os.environ.get("NEXTCLOUD_USERNAME", "testuser"))
+        config.setdefault("password", os.environ.get("NEXTCLOUD_PASSWORD", "testpass"))
+        # Set up Nextcloud-specific compatibility hints
+        if "features" not in config:
+            config["features"] = compatibility_hints.nextcloud.copy()
+        # user1-user3 are created by setup_nextcloud.sh for scheduling tests
+        if "scheduling_users" not in config:
+            base = f"http://{host}:{port}/remote.php/dav"
+            config["scheduling_users"] = [
+                {"url": base, "username": f"user{i}", "password": f"testpass{i}"}
+                for i in range(1, 4)
+            ]
+        super().__init__(config)
+
+    def _default_port(self) -> int:
+        return 8801
+
+    @property
+    def url(self) -> str:
+        return f"http://{self.host}:{self.port}/remote.php/dav"
+
+    def is_accessible(self) -> bool:
+        """Check if Nextcloud is accessible."""
+        try:
+            response = requests.get(f"{self.url}/", timeout=DEFAULT_HTTP_TIMEOUT)
+            return response.status_code in (200, 207, 401, 403, 404)
+        except Exception:
+            return False
+
+
+class CyrusTestServer(DockerTestServer):
+    """
+    Cyrus IMAP server with CalDAV support in Docker.
+
+    Cyrus is a mail server that also supports CalDAV/CardDAV.
+    The ghcr.io/cyrusimap/cyrus-docker-test-server image pre-creates
+    user1-user5 (password 'x') with CalDAV scheduling support.
+    """
+
+    name = "Cyrus"
+
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
+        config = config or {}
+        host = config.get("host") or os.environ.get("CYRUS_HOST", "localhost")
+        port = int(config.get("port") or os.environ.get("CYRUS_PORT", "8802"))
+        config.setdefault("host", host)
+        config.setdefault("port", port)
+        config.setdefault("username", os.environ.get("CYRUS_USERNAME", "user1"))
+        config.setdefault(
+            "password", os.environ.get("CYRUS_PASSWORD", "any-password-seems-to-work")
+        )
+        # Set up Cyrus-specific compatibility hints
+        if "features" not in config:
+            config["features"] = compatibility_hints.cyrus.copy()
+        # The docker image pre-creates user1-user5 with password 'x'
+        if "scheduling_users" not in config:
+            config["scheduling_users"] = [
+                {
+                    "url": f"http://{host}:{port}/dav/calendars/user/user{i}",
+                    "username": f"user{i}",
+                    "password": "x",
+                }
+                for i in range(1, 4)
+            ]
+        super().__init__(config)
+
+    def _default_port(self) -> int:
+        return 8802
+
+    @property
+    def url(self) -> str:
+        return f"http://{self.host}:{self.port}/dav/calendars/user/{self.username}"
+
+    def is_accessible(self) -> bool:
+        """Check if Cyrus is accessible using PROPFIND."""
+        try:
+            response = requests.request(
+                "PROPFIND",
+                f"http://{self.host}:{self.port}/dav/",
+                timeout=DEFAULT_HTTP_TIMEOUT,
+            )
+            return response.status_code in (200, 207, 401, 403, 404)
+        except Exception:
+            return False
+
+
+class SOGoTestServer(DockerTestServer):
+    """
+    SOGo groupware server in Docker.
+
+    SOGo is an open-source groupware server with CalDAV support.
+    """
+
+    name = "SOGo"
+
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
+        config = config or {}
+        host = config.get("host") or os.environ.get("SOGO_HOST", "localhost")
+        port = int(config.get("port") or os.environ.get("SOGO_PORT", "8803"))
+        config.setdefault("host", host)
+        config.setdefault("port", port)
+        config.setdefault("username", os.environ.get("SOGO_USERNAME", "testuser"))
+        config.setdefault("password", os.environ.get("SOGO_PASSWORD", "testpass"))
+        # Set up SOGo-specific compatibility hints
+        if "features" not in config:
+            config["features"] = compatibility_hints.sogo.copy()
+        # user1-user3 are pre-seeded in init-sogo-users.sql for scheduling tests
+        if "scheduling_users" not in config:
+            base = f"http://{host}:{port}/SOGo/dav"
+            config["scheduling_users"] = [
+                {"url": f"{base}/user{i}", "username": f"user{i}", "password": f"testpass{i}"}
+                for i in range(1, 4)
+            ]
+        super().__init__(config)
+
+    def _default_port(self) -> int:
+        return 8803
+
+    @property
+    def url(self) -> str:
+        return f"http://{self.host}:{self.port}/SOGo/dav/{self.username}"
+
+    def is_accessible(self) -> bool:
+        """Check if SOGo is accessible using PROPFIND."""
+        try:
+            response = requests.request(
+                "PROPFIND",
+                f"http://{self.host}:{self.port}/SOGo/",
+                timeout=DEFAULT_HTTP_TIMEOUT,
+            )
+            return response.status_code in (200, 207, 401, 403, 404)
+        except Exception:
+            return False
+
+
+class Bedework3TestServer(DockerTestServer):
+    """
+    Bedework 3.10.3 calendar server in Docker.
+
+    This is the ancient `ioggstream/bedework` image from 2018; see
+    tests/docker-test-servers/bedework3/README.md.  For a current Bedework
+    use :class:`BedeworkTestServer`.
+    """
+
+    name = "Bedework3"
+
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
+        config = config or {}
+        config.setdefault("host", os.environ.get("BEDEWORK3_HOST", "localhost"))
+        config.setdefault("port", int(os.environ.get("BEDEWORK3_PORT", "8804")))
+        config.setdefault("username", os.environ.get("BEDEWORK3_USERNAME", "vbede"))
+        config.setdefault("password", os.environ.get("BEDEWORK3_PASSWORD", "bedework"))
+        # Set up Bedework-specific compatibility hints
+        if "features" not in config:
+            config["features"] = compatibility_hints.bedework_3_10_3.copy()
+        super().__init__(config)
+
+    def _default_port(self) -> int:
+        return 8804
+
+    @property
+    def url(self) -> str:
+        return f"http://{self.host}:{self.port}/ucaldav/user/{self.username}"
+
+    def is_accessible(self) -> bool:
+        """Check if Bedework is accessible using PROPFIND."""
+        try:
+            response = requests.request(
+                "PROPFIND",
+                f"http://{self.host}:{self.port}/ucaldav/",
+                timeout=DEFAULT_HTTP_TIMEOUT,
+            )
+            return response.status_code in (200, 207, 401, 403, 404)
+        except Exception:
+            return False
+
+
+class BedeworkTestServer(DockerTestServer):
+    """
+    Bedework 5 calendar server in Docker.
+
+    Built locally from the upstream galleon feature pack - see
+    tests/docker-test-servers/bedework/README.md - so there is no image to
+    pull and no CI job; ./build.sh has to be run by hand first.
+
+    Measured 2026-09-12 into compatibility_hints.bedework_5_0_0; nothing is
+    inherited from the 3.10.3 profile, which describes a different server.
+    """
+
+    name = "Bedework"
+
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
+        config = config or {}
+        config.setdefault("host", os.environ.get("BEDEWORK_HOST", "localhost"))
+        config.setdefault("port", int(os.environ.get("BEDEWORK_PORT", "8811")))
+        config.setdefault("username", os.environ.get("BEDEWORK_USERNAME", "vbede"))
+        config.setdefault("password", os.environ.get("BEDEWORK_PASSWORD", "bedework"))
+        if "features" not in config:
+            config["features"] = compatibility_hints.bedework_5_0_0.copy()
+        super().__init__(config)
+
+    def _default_port(self) -> int:
+        return 8811
+
+    @property
+    def url(self) -> str:
+        return f"http://{self.host}:{self.port}/ucaldav/user/{self.username}"
+
+    def is_accessible(self) -> bool:
+        """Check if Bedework is accessible using PROPFIND."""
+        try:
+            response = requests.request(
+                "PROPFIND",
+                f"http://{self.host}:{self.port}/ucaldav/",
+                timeout=DEFAULT_HTTP_TIMEOUT,
+            )
+            return response.status_code in (200, 207, 401, 403, 404)
+        except Exception:
+            return False
+
+
+class DavicalTestServer(DockerTestServer):
+    """
+    DAViCal CalDAV server in Docker.
+
+    DAViCal is a CalDAV server using PostgreSQL as its backend.
+    It provides full CalDAV and CardDAV support.
+    """
+
+    name = "Davical"
+
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
+        config = config or {}
+        host = config.get("host") or os.environ.get("DAVICAL_HOST", "localhost")
+        port = int(config.get("port") or os.environ.get("DAVICAL_PORT", "8805"))
+        config.setdefault("host", host)
+        config.setdefault("port", port)
+        config.setdefault("username", os.environ.get("DAVICAL_USERNAME", "testuser"))
+        config.setdefault("password", os.environ.get("DAVICAL_PASSWORD", "testpass"))
+        if "features" not in config:
+            config["features"] = compatibility_hints.davical.copy()
+        # user1-user3 are created by setup_davical.sh for scheduling tests
+        if "scheduling_users" not in config:
+            config["scheduling_users"] = [
+                {
+                    "url": f"http://{host}:{port}/caldav.php/user{i}/",
+                    "username": f"user{i}",
+                    "password": f"testpass{i}",
+                }
+                for i in range(1, 4)
+            ]
+        super().__init__(config)
+
+    def _default_port(self) -> int:
+        return 8805
+
+    @property
+    def url(self) -> str:
+        return f"http://{self.host}:{self.port}/caldav.php/{self.username}/"
+
+    def is_accessible(self) -> bool:
+        """Check if DAViCal is accessible."""
+        try:
+            response = requests.request(
+                "PROPFIND",
+                f"http://{self.host}:{self.port}/caldav.php/",
+                timeout=DEFAULT_HTTP_TIMEOUT,
+            )
+            return response.status_code in (200, 207, 401, 403, 404)
+        except Exception:
+            return False
+
+
+class DavisTestServer(DockerTestServer):
+    """
+    Davis CalDAV server in Docker.
+
+    Davis is a modern admin interface for sabre/dav, using Symfony 7.
+    The standalone image bundles PHP-FPM + Caddy with SQLite.
+    """
+
+    name = "Davis"
+
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
+        config = config or {}
+        host = config.get("host") or os.environ.get("DAVIS_HOST", "localhost")
+        port = int(config.get("port") or os.environ.get("DAVIS_PORT", "8806"))
+        config.setdefault("host", host)
+        config.setdefault("port", port)
+        config.setdefault("username", os.environ.get("DAVIS_USERNAME", "testuser"))
+        config.setdefault("password", os.environ.get("DAVIS_PASSWORD", "testpass"))
+        if "features" not in config:
+            config["features"] = compatibility_hints.davis.copy()
+        # user1-user3 are created by setup_davis.sh for scheduling tests
+        if "scheduling_users" not in config:
+            base = f"http://{host}:{port}/dav/"
+            config["scheduling_users"] = [
+                {"url": base, "username": f"user{i}", "password": f"testpass{i}"}
+                for i in range(1, 4)
+            ]
+        super().__init__(config)
+
+    def _default_port(self) -> int:
+        return 8806
+
+    @property
+    def url(self) -> str:
+        return f"http://{self.host}:{self.port}/dav/"
+
+
+class CCSTestServer(DockerTestServer):
+    """
+    Apple CalendarServer (CCS) in Docker.
+
+    CCS is Apple's open-source CalDAV/CardDAV server (archived 2019).
+    Uses UID-based principal URLs and XML-based directory service.
+    """
+
+    name = "CCS"
+
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
+        config = config or {}
+        host = config.get("host") or os.environ.get("CCS_HOST", "localhost")
+        port = int(config.get("port") or os.environ.get("CCS_PORT", "8807"))
+        config.setdefault("host", host)
+        config.setdefault("port", port)
+        config.setdefault("username", os.environ.get("CCS_USERNAME", "user01"))
+        config.setdefault("password", os.environ.get("CCS_PASSWORD", "user01"))
+        if "features" not in config:
+            config["features"] = compatibility_hints.ccs.copy()
+        # user01 and user02 are pre-defined in conf/auth/accounts.xml for scheduling tests
+        if "scheduling_users" not in config:
+            base = f"http://{host}:{port}/principals/"
+            config["scheduling_users"] = [
+                {"url": base, "username": f"user0{i}", "password": f"user0{i}"} for i in range(1, 3)
+            ]
+        super().__init__(config)
+
+    def _default_port(self) -> int:
+        return 8807
+
+    @property
+    def url(self) -> str:
+        return f"http://{self.host}:{self.port}/principals/"
+
+
+class ZimbraTestServer(DockerTestServer):
+    """
+    Zimbra Collaboration Suite CalDAV server in Docker.
+
+    Zimbra is a heavyweight server (~6GB RAM, ~10 min first startup).
+    Uses HTTPS with a self-signed certificate.
+    """
+
+    name = "Zimbra"
+
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
+        config = config or {}
+        host = config.get("host") or os.environ.get("ZIMBRA_HOST", "zimbra-docker.zimbra.io")
+        port = int(config.get("port") or os.environ.get("ZIMBRA_PORT", "8808"))
+        config.setdefault("host", host)
+        config.setdefault("port", port)
+        config.setdefault(
+            "username",
+            os.environ.get("ZIMBRA_USERNAME", "testuser@zimbra.io"),
+        )
+        config.setdefault("password", os.environ.get("ZIMBRA_PASSWORD", "testpass"))
+        config.setdefault("ssl_verify_cert", False)
+        if "features" not in config:
+            config["features"] = compatibility_hints.zimbra_8_8.copy()
+        # testuser/testuser2/testuser3 are created by start.sh for scheduling tests
+        if "scheduling_users" not in config:
+            domain = os.environ.get("ZIMBRA_DOMAIN", "zimbra.io")
+            config["scheduling_users"] = [
+                {
+                    "url": f"https://{host}:{port}/dav/",
+                    "username": f"testuser{'' if i == 1 else i}@{domain}",
+                    "password": "testpass",
+                    "ssl_verify_cert": False,
+                }
+                for i in range(1, 4)
+            ]
+        super().__init__(config)
+
+    def _default_port(self) -> int:
+        return 8808
+
+    @property
+    def url(self) -> str:
+        return f"https://{self.host}:{self.port}/dav/"
+
+    def is_accessible(self) -> bool:
+        """Check if Zimbra is accessible (HTTPS with self-signed cert)."""
+        import warnings
+
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", category=Warning)
+                response = requests.get(
+                    f"https://{self.host}:{self.port}/",
+                    timeout=DEFAULT_HTTP_TIMEOUT,
+                    verify=False,
+                )
+            return response.status_code in (200, 301, 302, 401, 403, 404)
+        except Exception:
+            return False
+
+
+class StalwartTestServer(DockerTestServer):
+    """
+    Stalwart all-in-one mail & collaboration server in Docker.
+
+    Stalwart added CalDAV/CardDAV support in 2024/2025. Uses plain HTTP on
+    port 8080 for both the admin interface and CalDAV access.
+
+    v0.16+ changes:
+    - User accounts use full email addresses (local@domain).
+    - CalDAV path URL-encodes the @: /dav/cal/user%40example.org/
+    - Management API moved from REST /api/ to JMAP POST /jmap.
+    - config.json (SQLite pointer) is required to avoid bootstrap mode.
+    """
+
+    name = "Stalwart"
+    _domain = "example.org"
+
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
+        config = config or {}
+        host = config.get("host") or os.environ.get("STALWART_HOST", "localhost")
+        port = int(config.get("port") or os.environ.get("STALWART_PORT", "8809"))
+        config.setdefault("host", host)
+        config.setdefault("port", port)
+        # v0.16+: username is a full email address; default matches setup_stalwart.sh
+        config.setdefault(
+            "username", os.environ.get("STALWART_USERNAME", f"testuser@{self._domain}")
+        )
+        config.setdefault("password", os.environ.get("STALWART_PASSWORD", "testcaldav"))
+        if "features" not in config:
+            config["features"] = compatibility_hints.stalwart.copy()
+        # user1-user3 are created by setup_stalwart.sh for scheduling tests
+        # Passwords match setup_stalwart.sh defaults (caldavtest{N}).
+        if "scheduling_users" not in config:
+            base = f"http://{host}:{port}/dav/cal"
+            config["scheduling_users"] = [
+                {
+                    "url": f"{base}/user{i}%40{self._domain}/",
+                    "username": f"user{i}@{self._domain}",
+                    "password": f"caldavtest{i}",
+                }
+                for i in range(1, 4)
+            ]
+        super().__init__(config)
+
+    def _default_port(self) -> int:
+        return 8809
+
+    @property
+    def url(self) -> str:
+        # URL-encode the @ in the email address for the CalDAV path component.
+        return f"http://{self.host}:{self.port}/dav/cal/{quote(self.username or '', safe='')}/"
+
+    @property
+    def jmap_url(self) -> str:
+        return f"http://{self.host}:{self.port}/.well-known/jmap"
+
+
+class OxTestServer(DockerTestServer):
+    """
+    Open-Xchange App Suite CalDAV server in Docker.
+
+    OX App Suite is a commercial groupware platform with CalDAV/CardDAV support.
+    The Docker image must be built locally before use (see tests/docker-test-servers/ox/build.sh).
+    First-run initialisation takes ~3 minutes.
+    """
+
+    name = "OX"
+
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
+        config = config or {}
+        config.setdefault("host", os.environ.get("OX_HOST", "localhost"))
+        config.setdefault("port", int(os.environ.get("OX_PORT", "8810")))
+        config.setdefault("username", os.environ.get("OX_USERNAME", "oxadmin"))
+        config.setdefault("password", os.environ.get("OX_PASSWORD", "oxadmin"))
+        if "features" not in config:
+            config["features"] = compatibility_hints.ox.copy()
+        super().__init__(config)
+
+    def _default_port(self) -> int:
+        return 8810
+
+    @property
+    def url(self) -> str:
+        return f"http://{self.host}:{self.port}/caldav/"
+
+    def is_accessible(self) -> bool:
+        """Check if OX CalDAV is accessible."""
+        try:
+            response = requests.request(
+                "PROPFIND",
+                self.url,
+                timeout=DEFAULT_HTTP_TIMEOUT,
+            )
+            return response.status_code in (200, 207, 401, 403)
+        except Exception:
+            return False
+
+
+# Register server classes
+register_server_class("baikal", BaikalTestServer)
+register_server_class("nextcloud", NextcloudTestServer)
+register_server_class("cyrus", CyrusTestServer)
+register_server_class("sogo", SOGoTestServer)
+register_server_class("bedework3", Bedework3TestServer)
+register_server_class("bedework", BedeworkTestServer)
+register_server_class("davical", DavicalTestServer)
+register_server_class("davis", DavisTestServer)
+register_server_class("ccs", CCSTestServer)
+register_server_class("zimbra", ZimbraTestServer)
+register_server_class("stalwart", StalwartTestServer)
+register_server_class("ox", OxTestServer)

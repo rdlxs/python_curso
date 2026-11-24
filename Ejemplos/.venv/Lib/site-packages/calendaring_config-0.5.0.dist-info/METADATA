@@ -1,0 +1,101 @@
+Metadata-Version: 2.5
+Name: calendaring-config
+Version: 0.5.0
+Summary: The shared configuration file of caldav, calendaring and calendaring-jmap: format, discovery and credentials
+Project-URL: Repository, https://github.com/pycalendar/calendaring-config
+Project-URL: Issues, https://github.com/pycalendar/calendaring-config/issues
+Project-URL: Changelog, https://github.com/pycalendar/calendaring-config/blob/main/docs/changelog.rst
+Author-email: Tobias Brox <tobias@redpill-linpro.com>
+License-Expression: GPL-3.0-or-later OR Apache-2.0
+License-File: COPYING.APACHE
+License-File: COPYING.GPL
+Classifier: Development Status :: 2 - Pre-Alpha
+Classifier: Intended Audience :: Developers
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Programming Language :: Python :: 3.14
+Classifier: Topic :: Office/Business :: Scheduling
+Classifier: Typing :: Typed
+Requires-Python: >=3.10
+Requires-Dist: pyyaml>=6.0
+Provides-Extra: dev
+Requires-Dist: keyring>=25; extra == 'dev'
+Requires-Dist: mypy==2.4.0; extra == 'dev'
+Requires-Dist: pre-commit>=4.0; extra == 'dev'
+Requires-Dist: pytest>=8.0; extra == 'dev'
+Requires-Dist: ruff==0.17.0; extra == 'dev'
+Requires-Dist: towncrier>=25.8; extra == 'dev'
+Requires-Dist: types-pyyaml; extra == 'dev'
+Provides-Extra: keyring
+Requires-Dist: keyring>=25; extra == 'keyring'
+Description-Content-Type: text/markdown
+
+# calendaring-config
+
+One configuration file for the pycalendar libraries: `caldav`,
+[`calendaring`](https://github.com/pycalendar/calendaring) and
+`calendaring-jmap`. A user with a CalDAV server, a JMAP account, a
+directory of `.ics` files and a GitHub repository describes them once:
+
+```yaml
+work:
+  kind: caldav
+  url: https://dav.example.com/
+  username: alice
+  password_command: [pass, show, dav/work]
+
+fastmail:
+  kind: jmap
+  url: https://api.fastmail.com/jmap/session
+  username: alice@example.com
+  password_keyring: fastmail
+
+everything:
+  contains: [work, fastmail]
+```
+
+```python
+from calendaring_config import load
+
+for conn in load(section="everything"):
+    print(conn.name, conn.kind, conn.params["url"])
+```
+
+`load()` finds the file, expands the section, resolves `inherits`,
+`${VAR}` references and secrets, applies the environment, and returns one
+`Connection` per backend: its section name, its kind (or `None`, when the
+reader should decide from the URL), and the keyword arguments for the
+backend's `connect()`. Old-style caldav files (`caldav_url`, …) are read
+unchanged. `load(environment=False)` reads no `CALDAV_*`, `JMAP_*` or
+`CALENDARING_*` variable. `load(kinds=("caldav",))` returns only CalDAV
+sections and those without a kind, and lets only `CALDAV_URL` replace
+the file. A reader that walks the file itself turns one section into a
+`Connection` with `section_connection()`, after merging what it
+`inherits` with `merged_section()` (kept for caldav's `config_section()`;
+it may be deprecated once plann no longer uses that function,
+https://github.com/PyCalendar/plann/issues/84). `find_config_file()`
+finds the file; `search_path()` lists where it looks, the
+first entry being where a new file belongs. Errors are `ConfigError`, a
+`ValueError`.
+
+The format is specified in [docs/format.md](docs/format.md).
+
+It is in early development and has no release yet. The design notes are in
+calendaring's
+[CONFIGURATION_PROPOSAL.md](https://github.com/pycalendar/calendaring/blob/main/docs/design/CONFIGURATION_PROPOSAL.md).
+
+## Installing
+
+```sh
+pip install calendaring-config            # or calendaring-config[keyring]
+```
+
+The `keyring` extra is needed only for `password_keyring` / `token_keyring`.
+
+## Licence
+
+GPL-3.0-or-later or Apache-2.0, at your option, like caldav and
+calendaring.
