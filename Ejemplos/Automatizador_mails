@@ -9,6 +9,7 @@ import imaplib
 import logging
 import re
 import ssl
+import sys
 import unicodedata
 from datetime import date
 from email import policy
@@ -69,7 +70,7 @@ def texto_mensaje(mensaje):
         parser = TextoHTML()
         parser.feed(texto)
         texto = ''.join(parser.partes)
-    return html.unescape(texto).replace('\xa0', ' ')
+    return ocultar_enlaces(html.unescape(texto)).replace('\xa0', ' ')
 
 
 def leer_correo(usuario, clave):
@@ -115,37 +116,108 @@ def verificar_calendario(usuario, clave):
         cliente.close()
 
 
+def ocultar_enlaces(texto):
+    # No imprimir URLs: algunos enlaces del correo autentican al usuario.
+    texto = re.sub(r'https?://[^\s<>]+', '[enlace omitido]', texto, flags=re.I)
+    return re.sub(r'(?i)\bloginToken\s*=\s*[^\s<>]+', 'loginToken=[omitido]', texto)
+
+
+def limpiar_lineas(texto):
+    """Quita cabeceras de reenvio y el pie de Xhendra antes de buscar fechas."""
+    salida = []
+    for linea in html.unescape(texto).splitlines():
+        linea = linea.strip().lstrip('>').strip()
+        plano = normalizar(linea)
+        if re.match(r'^(notificarme|ver en xhendra|no responda a este mail|\[google play\])', plano):
+            break
+        if re.match(r'^(de|from|enviado|sent|fecha|date|para|to|cc|asunto|subject)\s*:', plano):
+            continue
+        if re.match(r'^(\[logo|[-_]{3,}|begin forwarded message|inicio del mensaje reenviado)', plano):
+            continue
+        linea = ocultar_enlaces(linea)
+        if linea:
+            salida.append(linea)
+    return salida
+
+
+def dividir_acto_retiro(bloque):
+    """Regla conservadora: divide solo si cada actividad tiene una hora unica.
+
+    No resuelve todos los textos posibles. Los casos no reconocidos conservan
+    todas sus horas y quedan para revision, sin elegir una arbitrariamente.
+    """
+    texto = bloque['texto']
+    plano = normalizar(texto)
+    if not (re.search(r'\bacto\b', plano) and re.search(r'retir|salida', plano)):
+        return [bloque]
+    oraciones = re.split(r'(?<=[.!?;])\s+', texto.lstrip('. '))
+    retiro = [s for s in oraciones if re.search(r'retir|salida', normalizar(s))]
+    acto = [s for s in oraciones if re.search(r'\bacto\b|regresan', normalizar(s))
+            and not re.search(r'retir|salida', normalizar(s))]
+    horas_retiro = list(dict.fromkeys(HORA.findall(' '.join(retiro))))
+    horas_acto = list(dict.fromkeys(HORA.findall(' '.join(acto))))
+    if len(horas_retiro) != 1 or len(horas_acto) != 1:
+        return [bloque]
+    separados = []
+    for titulo, partes in [('Retiro de alumnos', retiro), ('Acto escolar', acto)]:
+        copia = dict(bloque)
+        copia['texto'] = ' '.join(partes)
+        copia['titulo'] = titulo
+        copia['separado'] = True
+        separados.append(copia)
+    return separados
+
+
 def candidatos(texto, anio):
-    # Cada fragmento empieza en una linea con fecha y conserva las siguientes.
-    # No asociamos automaticamente varias horas a un unico evento.
     bloques = []
     actual = None
     contexto = ''
-    for linea in texto.splitlines():
-        linea = linea.strip()
-        if not linea:
-            continue
+    anio_seccion = anio
+    for linea in limpiar_lineas(texto):
         plano = normalizar(linea)
-        if FECHA.search(plano):
+        # Un encabezado nuevo termina el evento anterior, no se agrega a el.
+        proximo = 'ano proximo' in plano or 'proximo ano' in plano
+        encabezado = bool(re.match(r'^[*\-\u2022. ]*(?:primera\s+)?reunion de familias', plano)
+                          or re.match(r'^[*\-\u2022. ]*inicio de clases', plano))
+        tiene_fecha = FECHA.search(plano)
+        if proximo or (encabezado and not tiene_fecha):
             if actual:
                 bloques.append(actual)
-            actual = {'linea': linea, 'texto': linea, 'contexto': contexto}
-        else:
+                actual = None
+            contexto = linea
+            explicitos = re.findall(r'\b20\d{2}\b', plano)
+            if explicitos:
+                anio_seccion = int(explicitos[-1])
+            elif proximo:
+                anio_seccion = anio + 1
+            continue
+        if tiene_fecha:
             if actual:
+                bloques.append(actual)
+            # Una actividad distinta con su fecha no hereda "reunion".
+            contexto_evento = linea if encabezado else contexto
+            actual = {'linea': linea, 'texto': linea, 'contexto': contexto_evento,
+                      'anio_seccion': anio_seccion}
+        elif actual:
+            # Evita incorporar despedidas generales al ultimo evento.
+            if plano.startswith('que estos ultimos'):
+                bloques.append(actual)
+                actual = None
+            else:
                 actual['texto'] += '\n' + linea
-            if re.search(r'reunion|inicio|ano proximo|ciclo', plano):
-                contexto = linea
     if actual:
         bloques.append(actual)
+    bloques = [parte for bloque in bloques for parte in dividir_acto_retiro(bloque)]
     resultados = []
     for bloque in bloques:
         linea = normalizar(bloque['linea'])
         anios = re.findall(r'\b20\d{2}\b', linea)
-        contexto_anios = re.findall(r'\b20\d{2}\b', bloque['contexto'])
-        elegido = int(anios[-1]) if anios else int(contexto_anios[-1]) if contexto_anios else anio
-        avisos = ['Revisar titulo, alcance y asociacion de horarios antes de cargar.']
+        elegido = int(anios[-1]) if anios else bloque['anio_seccion']
+        avisos = ['PENDIENTE: revisar antes de cargar en Family Calendar.']
+        if bloque.get('separado'):
+            avisos.append('Actividad separada por su oracion y horario; validar el alcance.')
         if not anios:
-            avisos.append(f'Ano {elegido} tomado del contexto o del ano base ingresado.')
+            avisos.append(f'Ano {elegido} inferido del ano base o de la seccion del comunicado.')
         fechas = []
         for match in FECHA.finditer(linea):
             if match.group(5):
@@ -166,13 +238,53 @@ def candidatos(texto, anio):
                     avisos.append(f'FECHA INVALIDA: {dia}/{mes}/{ano}')
         horas = list(dict.fromkeys(HORA.findall(bloque['texto'])))
         if len(horas) > 1:
-            avisos.append('VARIAS HORAS: puede contener mas de un evento (por ejemplo retiro y acto).')
+            avisos.append('VARIAS HORAS SIN RESOLVER: no se elige una automaticamente.')
         if not horas:
-            avisos.append('Sin hora detectada: no se inventa un horario.')
-        if re.search(r'\bsalas?\b|\bgrados?\b', normalizar(bloque['texto'])):
-            avisos.append('Revisar sala/grado: todavia no hay filtro familiar configurado.')
+            avisos.append('Sin hora informada: posible evento de todo el dia, pendiente de validar.')
+        plano = normalizar(bloque['texto'])
+        if 'todas las salas' in plano:
+            avisos.append('Alcance indicado: todas las salas.')
+        elif re.search(r'\bsalas?\b|\bgrados?\b', plano):
+            avisos.append('SELECCION PENDIENTE: evento especifico de sala/grado.')
         resultados.append((bloque, fechas, horas, avisos))
     return resultados
+
+
+def autoprueba():
+    """Regresion local sin credenciales, Internet ni modificaciones a iCloud."""
+    muestra = '''Enviado: viernes, 20 de noviembre de 2026 12:40
+Asunto: FECHAS IMPORTANTES
+. 7 y 8/12 JUEVES Feriado.
+. 9/12 MIERCOLES 19:00 hs Acto escolar para salas de 5 anos 2026. Como todo el nivel participa, retirandose todas las salas luego del almuerzo 13:15 hs. Los ninos de salas de 5 regresan a las 19:00 hs.
+. 18/12 VIERNES Envio de informes.
+Anticipandonos para el ano proximo:
+* Primera Reunion de Familias, sin alumnos/as
+SALAS de 2 y 3 ANOS 2027 Miercoles 24/2 8:30 hs.
+SALAS de 4 y 5 ANOS 2027 Jueves 25/2 8:30 hs.
+* Inicio de clases Ciclo 2027 1 de Marzo
+Que estos ultimos pasitos del ano nos encuentren unidos.
+Notificarme<https://example.invalid/?loginToken=SECRETO_DE_PRUEBA>
+Pie de correo 20/11/2026'''
+    resultados = candidatos(muestra, 2026)
+    assert len(resultados) == 7, 'Cantidad de candidatos inesperada'
+    assert not any('2026-11-20' in r[1] for r in resultados), 'Cabecera tratada como evento'
+    assert any('CONTRADICCION' in a for a in resultados[0][3]), 'No detecta dia contradictorio'
+    retiro = next(r for r in resultados if r[0].get('titulo') == 'Retiro de alumnos')
+    acto = next(r for r in resultados if r[0].get('titulo') == 'Acto escolar')
+    assert retiro[2] == ['13:15'] and acto[2] == ['19:00'], 'Horarios mal separados'
+    assert 'todas las salas' in retiro[0]['texto'], 'Se perdio alcance del retiro'
+    informes = next(r for r in resultados if r[1] == ['2026-12-18'])
+    assert 'proximo' not in informes[0]['texto'], 'Encabezado pegado al evento anterior'
+    inicio = next(r for r in resultados if r[1] == ['2027-03-01'])
+    assert 'Inicio de clases' in inicio[0]['contexto'], 'Contexto heredado incorrectamente'
+    assert 'SECRETO_DE_PRUEBA' not in repr(resultados), 'Se filtro un token'
+    assert 'SECRETO' not in ocultar_enlaces('https://example.invalid/?loginToken=SECRETO')
+    assert candidatos('Anticipandonos para el ano proximo:\n1/3 Inicio', 2026)[0][1] == ['2027-03-01']
+    assert any('FECHA INVALIDA' in a for a in candidatos('31/2 Reunion', 2026)[0][3])
+    parser = TextoHTML()
+    parser.feed('<p>9/12 Salida 13:15</p><script>dato oculto</script>')
+    assert 'dato oculto' not in ''.join(parser.partes)
+    print('OK: autoprueba de cabeceras, contexto, anos, horas, HTML y enlaces.')
 
 
 def main():
@@ -189,24 +301,32 @@ def main():
     if not 2000 <= anio <= 2100:
         raise ValueError('Ano fuera de rango')
     resultados = candidatos(texto, anio)
-    print(f'\nFragmentos con fechas detectados: {len(resultados)}')
+    print(f'\nCandidatos para revision: {len(resultados)}')
     for numero, (bloque, fechas, horas, avisos) in enumerate(resultados, 1):
         print(f'\n[{numero}] Fechas: {", ".join(fechas) or "Revisar"}')
+        print('Actividad:', bloque.get('titulo', 'Revisar texto'))
         print('Horas encontradas:', ', '.join(horas) or 'Ninguna')
         print('Contexto:', bloque['contexto'] or '(sin encabezado)')
         print('Texto original:\n' + bloque['texto'])
         for aviso in avisos:
             print('  - ' + aviso)
     print('\nFIN: no se escribio en iCloud ni se envio nada a Telegram.')
-    print('Esta deteccion es preliminar: puede incluir fechas de encabezados o perder fechas relativas.')
+    print('Deteccion preliminar: las fechas relativas y otros formatos requieren revision.')
 
 
 if __name__ == '__main__':
     try:
-        main()
+        if '--autoprueba' in sys.argv:
+            autoprueba()
+        else:
+            main()
     except (KeyboardInterrupt, EOFError):
         print('\nCancelado.')
     except Exception as error:
+        if '--autoprueba' in sys.argv:
+            raise
         # No se imprimen respuestas de servidores que puedan contener datos privados.
         print(f'No se pudo completar la prueba: {type(error).__name__}.')
         print('Revisa credenciales, seleccion de correo, ano y conexion.')
+
+
